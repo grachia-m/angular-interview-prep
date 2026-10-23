@@ -2,11 +2,13 @@ import { lookupEntries, questions } from './data.js';
 import { sectionMeta } from './data.js';
 import {
   applyRating,
+  buildMockReport,
   calculateReadiness,
   filterLookup,
   getDeck,
   normalizeState,
   selectCramSession,
+  selectMockQuestions,
   selectWorkout,
   toggleBookmark,
 } from './engine.js';
@@ -247,6 +249,83 @@ function renderPracticeHub(state) {
     </section>`;
 }
 
+export function renderMockSetup() {
+  return `
+    <section class="mock-setup">
+      <header class="view-intro"><p class="eyebrow">No answers until the end</p><h2>30 min mock interview</h2><p>Six questions, one at a time. Speak your answer out loud, leave yourself a short note, and judge coverage—not charisma.</p></header>
+      <div class="level-grid">
+        <article class="level-card">
+          <div class="level-number">M</div><p class="eyebrow">Middle developer</p><h3>Reason clearly from the fundamentals.</h3><p>Practical Angular, RxJS decisions, code review, and one modern migration question.</p>
+          <ul><li>6 questions</li><li>~30 minutes</li><li>Balanced difficulty</li></ul>
+          <button class="secondary-button" type="button" data-action="start-mock" data-level="middle">Start middle interview</button>
+        </article>
+        <article class="level-card senior-level">
+          <div class="level-number">S</div><p class="eyebrow">Senior developer</p><h3>Make the tradeoff visible.</h3><p>Architecture, migration risk, performance, modern rendering, and state ownership.</p>
+          <ul><li>6 questions</li><li>~30 minutes</li><li>Higher ambiguity</li></ul>
+          <button class="primary-button" type="button" data-action="start-mock" data-level="senior">Start senior interview</button>
+        </article>
+      </div>
+    </section>`;
+}
+
+export function renderMockQuestion({ items, index, level, answers = {} }) {
+  const item = items[index];
+  const progress = Math.round(((index + 1) / items.length) * 100);
+  return `
+    <section class="mock-session" aria-labelledby="mock-question-title">
+      <header class="mock-session-head">
+        <div><p class="eyebrow">${escapeHtml(level)} mock · question ${index + 1} of ${items.length}</p><h2>Interview in progress</h2></div>
+        <div class="mock-timer"><span aria-hidden="true">◷</span><strong>~${Math.max(5, 30 - index * 5)} min</strong><small>remaining</small></div>
+      </header>
+      <div class="meter mock-meter" aria-label="Mock interview ${progress}% complete"><span style="width:${progress}%"></span></div>
+      <article class="mock-question-card">
+        <div class="question-meta"><div><span class="type-label">${escapeHtml(item.type)}</span><span>${escapeHtml(item.topic)}</span><span>${escapeHtml(versionLabel(item))}</span></div></div>
+        <p class="question-count">Interviewer asks</p>
+        <h3 id="mock-question-title">${escapeHtml(item.prompt)}</h3>
+        <label class="response-field"><span>Your answer notes</span><textarea id="mock-answer" rows="7" placeholder="Write a few anchors after answering out loud…">${escapeHtml(answers[item.id] || '')}</textarea></label>
+        <div class="mock-self-check"><div><p class="answer-label">Private self-check</p><p>Did your answer cover the decision and its tradeoffs?</p></div><div>${[['strong', 'Strong'], ['partial', 'Partial'], ['pass', 'Pass / unsure']].map(([value, label]) => `<button type="button" data-action="mock-assess" data-assessment="${value}">${label}</button>`).join('')}</div></div>
+      </article>
+      <p class="mock-note">Key points stay hidden until the full interview is complete.</p>
+    </section>`;
+}
+
+export function renderMockReport(report) {
+  const list = (entries, fallback) => entries.length
+    ? `<ul class="report-topics">${entries.map((entry) => `<li><span>${escapeHtml(entry.topic)}</span><small>${escapeHtml(entry.assessment)}</small></li>`).join('')}</ul>`
+    : `<p class="result-empty">${fallback}</p>`;
+  return `
+    <section class="mock-report">
+      <header class="report-hero"><div><p class="eyebrow">Interview complete</p><h2>Your answers had a shape.<br>Now sharpen the weak edge.</h2></div><div class="report-score"><strong>${report.score}</strong><span>mock readiness</span></div></header>
+      <div class="report-grid">
+        <article class="paper-card"><p class="eyebrow">Strong</p><h3>${report.strong.length} answers held up</h3>${list(report.strong, 'No answer was marked strong this round.')}</article>
+        <article class="paper-card"><p class="eyebrow">Needs work</p><h3>${report.needsWork.length} answers to revisit</h3>${list(report.needsWork, 'No immediate weakness marked.')}</article>
+        <article class="risk-card"><p class="eyebrow">Interview risk</p><h3>${escapeHtml(report.risk)}</h3><p>Re-answer the weakest prompt in two minutes: decision first, reasons second, risks last.</p></article>
+      </div>
+      <div class="report-actions"><button class="primary-button" type="button" data-action="practice-mock-gaps">Practice these gaps</button><button class="secondary-button" type="button" data-action="restart-mock">Run another mock</button></div>
+    </section>`;
+}
+
+export function renderProgressView({ state: rawState, questions: content, now = new Date() }) {
+  const state = normalizeState(rawState);
+  const readiness = calculateReadiness(content, state);
+  const modern = calculateReadiness(content.filter((item) => item.versions.some((version) => version >= 18)), state);
+  const due = getDeck(content, state, 'due', now).length;
+  const practiced = Object.keys(state.progress).length;
+  return `
+    <section class="progress-view">
+      <header class="view-intro"><p class="eyebrow">Useful signal, no leaderboard</p><h2>Interview readiness</h2><p>This is a study estimate from your own confidence ratings. It shows where to spend the next session, not a promise about an interview outcome.</p></header>
+      <div class="progress-summary">
+        <article class="readiness-panel"><p class="eyebrow">Overall readiness</p><strong>${readiness.overall}%</strong><div class="meter"><span style="width:${readiness.overall}%"></span></div><p>${practiced ? `${practiced} questions have real ratings.` : 'Start a workout to replace the baseline with your own evidence.'}</p></article>
+        <article class="gap-panel"><p class="eyebrow">Biggest interview gap</p><h3>${escapeHtml(readiness.weakest.topic)}</h3><p>This topic has the lowest current confidence estimate and will surface more often.</p><button class="text-button" type="button" data-action="practice-topic" data-topic="${escapeHtml(readiness.weakest.topic)}">Practice this gap →</button></article>
+        <article class="review-panel"><p class="eyebrow">Review today</p><strong>${due}</strong><p>${due ? 'concepts are due for spaced repetition.' : 'Nothing overdue. New ratings will start the schedule.'}</p><button class="text-button" type="button" data-action="open-deck" data-deck="due">Open review deck →</button></article>
+      </div>
+      <div class="topic-panel">
+        <div class="topic-panel-head"><div><p class="eyebrow">Topic breakdown</p><h3>Modern Angular readiness · ${modern.overall}%</h3></div><p>Lower-confidence topics appear first.</p></div>
+        <div class="topic-bars">${readiness.topics.map((topic) => `<div class="topic-row"><div><span>${escapeHtml(topic.topic)}</span><strong>${topic.score}%</strong></div><div class="meter" aria-label="${escapeHtml(topic.topic)} ${topic.score}%"><span style="width:${topic.score}%"></span></div></div>`).join('')}</div>
+      </div>
+    </section>`;
+}
+
 function renderPlaceholder(view) {
   const copy = {
     practice: ['Practice library', 'Start with the structured workout or choose a focused deck.'],
@@ -276,6 +355,7 @@ function boot() {
   let currentView = location.hash.replace('#', '') || 'today';
   let currentDeck = 'saved';
   let session = null;
+  let mock = null;
   const viewNode = document.querySelector('#view');
   const pageTitle = document.querySelector('#page-title');
   const versionSelect = document.querySelector('#version-mode');
@@ -304,6 +384,12 @@ function boot() {
     else if (view === 'workout' && session) viewNode.innerHTML = renderWorkoutView({ ...session, state });
     else if (view === 'review' && session) viewNode.innerHTML = renderReviewView({ items: session.items, state });
     else if (view === 'saved') viewNode.innerHTML = renderDeckView({ deck: currentDeck, items: getDeck(questions, state, currentDeck), state });
+    else if (view === 'mock') {
+      if (!mock) viewNode.innerHTML = renderMockSetup();
+      else if (mock.complete) viewNode.innerHTML = renderMockReport(buildMockReport(mock.items, mock.assessments, state));
+      else viewNode.innerHTML = renderMockQuestion(mock);
+    }
+    else if (view === 'progress') viewNode.innerHTML = renderProgressView({ state, questions });
     else viewNode.innerHTML = renderPlaceholder(view);
     setActiveNav(['workout', 'review'].includes(view) ? 'practice' : view);
     syncControls();
@@ -402,6 +488,30 @@ function boot() {
     if (action === 'practice-weak') {
       const weak = getDeck(questions, state, 'mistakes');
       startSession((weak.length ? weak : selectCramSession(questions, state, { total: 6 })).slice(0, 6), 'weak areas');
+    }
+    if (action === 'start-mock') {
+      const level = actionNode.dataset.level || 'middle';
+      mock = { items: selectMockQuestions(questions, level, 6), index: 0, level, answers: {}, assessments: {}, complete: false };
+      render('mock');
+      document.querySelector('#main-view')?.focus();
+    }
+    if (action === 'mock-assess' && mock) {
+      const item = mock.items[mock.index];
+      const answer = document.querySelector('#mock-answer')?.value || '';
+      mock.answers[item.id] = answer;
+      mock.assessments[item.id] = actionNode.dataset.assessment || 'partial';
+      if (mock.index >= mock.items.length - 1) mock.complete = true;
+      else mock.index += 1;
+      render('mock');
+      document.querySelector('#main-view')?.focus();
+    }
+    if (action === 'restart-mock') {
+      mock = null;
+      render('mock');
+    }
+    if (action === 'practice-mock-gaps' && mock) {
+      const report = buildMockReport(mock.items, mock.assessments, state);
+      startSession(report.needsWork.map((entry) => questions.find((item) => item.id === entry.id)).filter(Boolean), 'mock gaps');
     }
   });
 

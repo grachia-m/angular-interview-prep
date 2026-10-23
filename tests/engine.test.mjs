@@ -2,16 +2,27 @@ import assert from 'node:assert/strict';
 
 import {
   applyRating,
+  buildMockReport,
   calculateReadiness,
   filterLookup,
   getDeck,
   normalizeState,
   selectCramSession,
+  selectMockQuestions,
   selectWorkout,
   toggleBookmark,
 } from '../dist/assets/engine.js';
 import { questions, lookupEntries } from '../dist/assets/data.js';
-import { renderDeckView, renderReviewView, renderTodayView, renderWorkoutView } from '../dist/assets/app.js';
+import {
+  renderDeckView,
+  renderMockQuestion,
+  renderMockReport,
+  renderMockSetup,
+  renderProgressView,
+  renderReviewView,
+  renderTodayView,
+  renderWorkoutView,
+} from '../dist/assets/app.js';
 
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
@@ -181,6 +192,43 @@ test('deck view renders empty guidance and saved question cards', () => {
   const html = renderDeckView({ deck: 'saved', items: [questions[0]], state: normalizeState({ bookmarks: [questions[0].id] }) });
   assert.match(html, new RegExp(questions[0].prompt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.match(html, /Remove/);
+});
+
+test('mock question selection is varied and senior mode is not easier than middle mode', () => {
+  const middle = selectMockQuestions(questions, 'middle', 6);
+  const senior = selectMockQuestions(questions, 'senior', 6);
+  assert.equal(middle.length, 6);
+  assert.equal(senior.length, 6);
+  assert.ok(new Set(senior.map((item) => item.section)).size >= 3);
+  const average = (items) => items.reduce((sum, item) => sum + item.difficulty, 0) / items.length;
+  assert.ok(average(senior) >= average(middle));
+});
+
+test('mock report groups strong and weak answers and names the clearest interview risk', () => {
+  const items = [questions[0], questions[3], questions[5]];
+  const report = buildMockReport(items, { [items[0].id]: 'strong', [items[1].id]: 'partial', [items[2].id]: 'pass' }, normalizeState({}));
+  assert.deepEqual(report.strong.map((entry) => entry.id), [items[0].id]);
+  assert.deepEqual(report.needsWork.map((entry) => entry.id), [items[1].id, items[2].id]);
+  assert.match(report.risk, new RegExp(items[2].topic, 'i'));
+  assert.ok(report.score >= 0 && report.score <= 100);
+});
+
+test('mock interview views defer answers and produce an interview-style report', () => {
+  const item = questions[5];
+  assert.match(renderMockSetup(), /30 min mock interview/);
+  const questionHtml = renderMockQuestion({ items: [item], index: 0, level: 'senior', answers: {} });
+  assert.match(questionHtml, /textarea/);
+  assert.doesNotMatch(questionHtml, new RegExp(item.answer.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  const report = buildMockReport([item], { [item.id]: 'partial' }, normalizeState({}));
+  assert.match(renderMockReport(report), /Interview risk/);
+});
+
+test('progress view names the biggest gap and remains useful with default state', () => {
+  const html = renderProgressView({ state: normalizeState({}), questions, now: new Date('2026-10-23T09:00:00.000Z') });
+  assert.match(html, /Biggest interview gap/);
+  assert.match(html, /Modern Angular readiness/);
+  assert.match(html, /review today/i);
+  assert.match(html, /Dependency injection/);
 });
 
 let failures = 0;

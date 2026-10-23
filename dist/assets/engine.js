@@ -199,3 +199,41 @@ export function selectCramSession(content, rawState, options = {}) {
   selectWorkout(content, state, 'modern', { total: content.length, now, structured: false }).forEach(add);
   return result.slice(0, total);
 }
+
+export function selectMockQuestions(content, level = 'middle', total = 6) {
+  const count = Math.max(1, Number(total) || 6);
+  const direction = level === 'senior' ? -1 : 1;
+  const ranked = [...content].sort((a, b) => direction * ((a.difficulty || 0) - (b.difficulty || 0)) || a.id.localeCompare(b.id));
+  const sections = ['warmup', 'modern', 'code', 'rxjs', 'scenario'];
+  const selected = [];
+  const seen = new Set();
+  const add = (item) => {
+    if (item && !seen.has(item.id) && selected.length < count) {
+      seen.add(item.id);
+      selected.push(item);
+    }
+  };
+  sections.forEach((section) => add(ranked.find((item) => item.section === section)));
+  ranked.forEach(add);
+  return selected.slice(0, count);
+}
+
+export function buildMockReport(items, assessments = {}, rawState = {}) {
+  const state = normalizeState(rawState);
+  const assessmentScores = { strong: 85, partial: 58, pass: 30 };
+  const entries = items.map((item) => {
+    const assessment = assessments[item.id] || 'pass';
+    const selfScore = assessmentScores[assessment] || assessmentScores.pass;
+    const previous = state.progress[item.id]?.mastery;
+    const score = Number.isFinite(previous) ? Math.round((selfScore * 2 + clamp(previous)) / 3) : selfScore;
+    return { ...item, assessment, score };
+  });
+  const strong = entries.filter((entry) => entry.assessment === 'strong');
+  const needsWork = entries.filter((entry) => entry.assessment !== 'strong');
+  const weakest = [...entries].sort((a, b) => a.score - b.score || b.difficulty - a.difficulty)[0];
+  const score = entries.length ? Math.round(entries.reduce((sum, entry) => sum + entry.score, 0) / entries.length) : 0;
+  const risk = weakest
+    ? `${weakest.topic} is the clearest interview risk: the answer needs a more explicit decision boundary and tradeoff.`
+    : 'Complete a mock interview to identify a specific risk.';
+  return { score: clamp(score), strong, needsWork, risk, entries };
+}
