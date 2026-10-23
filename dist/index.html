@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f1eadf" />
+    <meta name="description" content="Adaptive Angular 16–22 interview workouts for experienced frontend developers." />
+    <title>Angle · Angular interview practice</title>
+    <link rel="stylesheet" href="./assets/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-view">Skip to practice</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="#today" data-nav="today" aria-label="Angle home">
+          <span class="brand-mark" aria-hidden="true">∠</span>
+          <span><strong>Angle</strong><small>interview practice</small></span>
+        </a>
+
+        <nav class="side-nav" aria-label="Study areas">
+          <button class="nav-item is-active" type="button" data-nav="today"><span>01</span>Today</button>
+          <button class="nav-item" type="button" data-nav="practice"><span>02</span>Practice</button>
+          <button class="nav-item" type="button" data-nav="lookup"><span>03</span>Quick lookup</button>
+          <button class="nav-item" type="button" data-nav="mock"><span>04</span>Mock interview</button>
+          <button class="nav-item" type="button" data-nav="saved"><span>05</span>Saved</button>
+          <button class="nav-item" type="button" data-nav="progress"><span>06</span>Progress</button>
+        </nav>
+
+        <div class="sidebar-note">
+          <span class="signal-dot" aria-hidden="true"></span>
+          <div><small>Angular mode</small><strong id="sidebar-mode">Mixed</strong></div>
+        </div>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <div class="topbar-copy">
+            <p class="eyebrow">Thursday · daily practice</p>
+            <h1 id="page-title">Today</h1>
+          </div>
+
+          <div class="topbar-actions">
+            <button class="lookup-trigger" type="button" data-action="open-lookup">
+              <span aria-hidden="true">⌕</span> Quick lookup <kbd>⌘ K</kbd>
+            </button>
+
+            <label class="version-picker">
+              <span>Angular</span>
+              <select id="version-mode" aria-label="Angular version">
+                <option value="mixed">Mixed</option>
+                <option value="16">16</option>
+                <option value="17">17</option>
+                <option value="18">18</option>
+                <option value="19">19</option>
+                <option value="20">20</option>
+                <option value="21">21</option>
+                <option value="22">22</option>
+              </select>
+            </label>
+
+            <label class="focus-toggle">
+              <input id="modern-focus" type="checkbox" />
+              <span class="toggle-track" aria-hidden="true"><span></span></span>
+              <span>Modern focus</span>
+            </label>
+          </div>
+        </header>
+
+        <main id="main-view" tabindex="-1">
+          <div id="view" aria-live="polite"></div>
+        </main>
+      </div>
+    </div>
+
+    <nav class="mobile-nav" aria-label="Mobile navigation">
+      <button class="is-active" type="button" data-nav="today">Today</button>
+      <button type="button" data-nav="practice">Practice</button>
+      <button type="button" data-nav="lookup">Lookup</button>
+      <button type="button" data-nav="mock">Mock</button>
+      <button type="button" data-nav="saved">Saved</button>
+      <button type="button" data-nav="progress">Progress</button>
+    </nav>
+
+    <dialog id="lookup-dialog" class="lookup-dialog" aria-labelledby="lookup-title">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">Quick lookup</p>
+          <h2 id="lookup-title">Find the concept, skip the docs detour.</h2>
+        </div>
+        <button class="icon-button" type="button" data-action="close-lookup" aria-label="Close quick lookup">×</button>
+      </div>
+      <label class="lookup-search">
+        <span aria-hidden="true">⌕</span>
+        <input id="lookup-input" type="search" placeholder="Try “signal input” or “switchMap”" autocomplete="off" />
+        <kbd>esc</kbd>
+      </label>
+      <div id="lookup-results" class="lookup-results"></div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./assets/app.js"></script>
+  </body>
+</html>

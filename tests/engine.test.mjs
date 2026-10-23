@@ -8,6 +8,7 @@ import {
   selectWorkout,
 } from '../dist/assets/engine.js';
 import { questions, lookupEntries } from '../dist/assets/data.js';
+import { renderTodayView } from '../dist/assets/app.js';
 
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
@@ -85,6 +86,19 @@ test('the seeded library covers every workout section and modern Angular version
 test('lookup filtering matches title, aliases, and content without case sensitivity', () => {
   assert.ok(filterLookup(lookupEntries, 'SIGNAL INPUT').some((entry) => entry.id === 'signal-inputs'));
   assert.ok(filterLookup(lookupEntries, 'unsubscribe').some((entry) => entry.id === 'take-until-destroyed'));
+});
+
+test('today view presents the workout structure and actionable readiness context', () => {
+  const state = normalizeState({});
+  const html = renderTodayView({ state, questions, now: new Date('2026-10-23T09:00:00.000Z') });
+  assert.match(html, /Ready for today’s workout\?/);
+  assert.match(html, /Warm-up/);
+  assert.match(html, /Modern Angular/);
+  assert.match(html, /Code Challenge/);
+  assert.match(html, /RxJS \/ NgRx/);
+  assert.match(html, /Senior Scenario/);
+  assert.match(html, /data-action="start-workout"/);
+  assert.match(html, /biggest interview gap/i);
 });
 
 let failures = 0;
