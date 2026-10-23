@@ -62,7 +62,7 @@ export function selectWorkout(content, rawState, mode = 'mixed', options = {}) {
   }
 
   const sections = new Set(content.map((item) => item.section));
-  const useStructure = total >= 11 && ['warmup', 'modern', 'code', 'rxjs', 'scenario'].every((section) => sections.has(section));
+  const useStructure = options.structured !== false && total >= 11 && ['warmup', 'modern', 'code', 'rxjs', 'scenario'].every((section) => sections.has(section));
   if (!useStructure) return ranked.slice(0, total).map(({ item }) => item);
 
   const quotas = { warmup: 3, modern: 3, code: 2, rxjs: 2, scenario: 1 };
@@ -137,3 +137,65 @@ export function filterLookup(entries, query) {
     .includes(needle));
 }
 
+export function toggleBookmark(rawState, itemId) {
+  const state = normalizeState(rawState);
+  const exists = state.bookmarks.includes(itemId);
+  return {
+    ...state,
+    bookmarks: exists
+      ? state.bookmarks.filter((id) => id !== itemId)
+      : [...state.bookmarks, itemId],
+  };
+}
+
+export function getDeck(content, rawState, deck, now = new Date()) {
+  const state = normalizeState(rawState);
+  const safeNow = now instanceof Date ? now : new Date(now);
+  if (deck === 'saved') return content.filter((item) => state.bookmarks.includes(item.id));
+  if (deck === 'modern') return content.filter((item) => item.versions?.some((version) => version >= 18));
+  if (deck === 'hard') return content.filter((item) => (item.difficulty || 0) >= 4);
+  if (deck === 'due') {
+    return content.filter((item) => {
+      const dueAt = state.progress[item.id]?.dueAt;
+      return dueAt && new Date(dueAt).getTime() <= safeNow.getTime();
+    });
+  }
+  if (deck === 'mistakes') {
+    return content
+      .filter((item) => (Number(state.progress[item.id]?.mistakes) || 0) > 0)
+      .sort((a, b) => {
+        const mistakes = (state.progress[b.id]?.mistakes || 0) - (state.progress[a.id]?.mistakes || 0);
+        return mistakes || masteryFor(a, state) - masteryFor(b, state);
+      });
+  }
+  return content;
+}
+
+export function selectCramSession(content, rawState, options = {}) {
+  const state = normalizeState(rawState);
+  const total = Math.max(1, Number(options.total) || 10);
+  const now = options.now ? new Date(options.now) : new Date();
+  const result = [];
+  const seen = new Set();
+  const add = (item) => {
+    if (item && !seen.has(item.id) && result.length < total) {
+      seen.add(item.id);
+      result.push(item);
+    }
+  };
+
+  getDeck(content, state, 'mistakes', now).slice(0, 2).forEach(add);
+  ['modern', 'rxjs', 'scenario'].forEach((section) => {
+    const candidate = selectWorkout(
+      content.filter((item) => section === 'modern'
+        ? item.versions?.some((version) => version >= 18)
+        : item.section === section),
+      state,
+      'modern',
+      { total: 1, now, structured: false },
+    )[0];
+    add(candidate);
+  });
+  selectWorkout(content, state, 'modern', { total: content.length, now, structured: false }).forEach(add);
+  return result.slice(0, total);
+}

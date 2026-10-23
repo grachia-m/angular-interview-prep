@@ -4,11 +4,14 @@ import {
   applyRating,
   calculateReadiness,
   filterLookup,
+  getDeck,
   normalizeState,
+  selectCramSession,
   selectWorkout,
+  toggleBookmark,
 } from '../dist/assets/engine.js';
 import { questions, lookupEntries } from '../dist/assets/data.js';
-import { renderTodayView } from '../dist/assets/app.js';
+import { renderDeckView, renderReviewView, renderTodayView, renderWorkoutView } from '../dist/assets/app.js';
 
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
@@ -99,6 +102,85 @@ test('today view presents the workout structure and actionable readiness context
   assert.match(html, /Senior Scenario/);
   assert.match(html, /data-action="start-workout"/);
   assert.match(html, /biggest interview gap/i);
+});
+
+test('an overdue missed question outranks an untouched peer in adaptive selection', () => {
+  const state = normalizeState({
+    progress: {
+      'modern-a': { mastery: 80 },
+      'modern-b': { mastery: 72, mistakes: 2, dueAt: '2026-10-20T09:00:00.000Z' },
+    },
+  });
+  const selected = selectWorkout(contentFixture, state, 'modern', { total: 2, now: '2026-10-23T09:00:00.000Z' });
+  assert.equal(selected[0].id, 'modern-b');
+});
+
+test('bookmark toggling is idempotent and the saved deck follows it', () => {
+  const saved = toggleBookmark(normalizeState({}), 'modern-a');
+  assert.deepEqual(saved.bookmarks, ['modern-a']);
+  assert.deepEqual(getDeck(contentFixture, saved, 'saved').map((item) => item.id), ['modern-a']);
+  const removed = toggleBookmark(saved, 'modern-a');
+  assert.deepEqual(removed.bookmarks, []);
+});
+
+test('mistakes, modern, hard, and due decks filter by their actual study signal', () => {
+  const state = normalizeState({
+    progress: {
+      'legacy-a': { mistakes: 1, dueAt: '2026-10-22T09:00:00.000Z' },
+      'modern-b': { mistakes: 2, dueAt: '2026-11-01T09:00:00.000Z' },
+    },
+  });
+  assert.deepEqual(getDeck(contentFixture, state, 'mistakes').map((item) => item.id), ['modern-b', 'legacy-a']);
+  assert.ok(getDeck(contentFixture, state, 'modern').every((item) => item.versions.some((version) => version >= 18)));
+  assert.ok(getDeck(contentFixture, state, 'hard').every((item) => item.difficulty >= 4));
+  assert.deepEqual(getDeck(contentFixture, state, 'due', new Date('2026-10-23T09:00:00.000Z')).map((item) => item.id), ['legacy-a']);
+});
+
+test('cram session prioritizes recent mistakes while retaining varied interview coverage', () => {
+  const state = normalizeState({ progress: { 'share-replay-cache': { mastery: 25, mistakes: 3 } } });
+  const cram = selectCramSession(questions, state, { total: 8, now: '2026-10-23T09:00:00.000Z' });
+  assert.equal(cram.length, 8);
+  assert.equal(cram[0].id, 'share-replay-cache');
+  assert.ok(cram.some((item) => item.section === 'modern'));
+  assert.ok(cram.some((item) => item.section === 'rxjs'));
+  assert.ok(cram.some((item) => item.section === 'scenario'));
+});
+
+test('workout view exposes progressive reveals, save control, and all confidence ratings', () => {
+  const item = questions.find((question) => question.code);
+  const html = renderWorkoutView({
+    items: [item],
+    index: 0,
+    state: normalizeState({}),
+    reveal: { hint: true, points: false, answer: false, code: false },
+    sessionKind: 'daily',
+  });
+  assert.match(html, new RegExp(item.hint.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(html, /Show key points/);
+  assert.match(html, /Show full answer/);
+  for (const label of ['Easy', 'Knew it', 'Unsure', 'Missed']) assert.match(html, new RegExp(label));
+  assert.match(html, /data-action="toggle-save"/);
+});
+
+test('review view separates confident work from repetition needs', () => {
+  const items = [questions[0], questions[3]];
+  const state = normalizeState({
+    progress: {
+      [items[0].id]: { confidence: 'easy', mastery: 70 },
+      [items[1].id]: { confidence: 'missed', mastery: 34, mistakes: 1 },
+    },
+  });
+  const html = renderReviewView({ items, state });
+  assert.match(html, /Strong today/);
+  assert.match(html, /Needs repetition/);
+  assert.match(html, /Practice my weak areas/);
+});
+
+test('deck view renders empty guidance and saved question cards', () => {
+  assert.match(renderDeckView({ deck: 'saved', items: [], state: normalizeState({}) }), /Nothing saved yet/);
+  const html = renderDeckView({ deck: 'saved', items: [questions[0]], state: normalizeState({ bookmarks: [questions[0].id] }) });
+  assert.match(html, new RegExp(questions[0].prompt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(html, /Remove/);
 });
 
 let failures = 0;
