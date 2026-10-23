@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   applyRating,
@@ -229,6 +230,17 @@ test('progress view names the biggest gap and remains useful with default state'
   assert.match(html, /Modern Angular readiness/);
   assert.match(html, /review today/i);
   assert.match(html, /Dependency injection/);
+});
+
+test('progress view uses singular copy after the first rated question', () => {
+  const state = normalizeState({ progress: { [questions[0].id]: { mastery: 60, confidence: 'knew' } } });
+  const html = renderProgressView({ state, questions, now: new Date('2026-10-23T09:00:00.000Z') });
+  assert.match(html, /1 question has a real rating\./);
+});
+
+test('modern focus keeps an accessible name when its visible mobile label is hidden', () => {
+  const markup = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
+  assert.match(markup, /id="modern-focus"[^>]*aria-label="Modern focus"/);
 });
 
 let failures = 0;

@@ -315,7 +315,7 @@ export function renderProgressView({ state: rawState, questions: content, now = 
     <section class="progress-view">
       <header class="view-intro"><p class="eyebrow">Useful signal, no leaderboard</p><h2>Interview readiness</h2><p>This is a study estimate from your own confidence ratings. It shows where to spend the next session, not a promise about an interview outcome.</p></header>
       <div class="progress-summary">
-        <article class="readiness-panel"><p class="eyebrow">Overall readiness</p><strong>${readiness.overall}%</strong><div class="meter"><span style="width:${readiness.overall}%"></span></div><p>${practiced ? `${practiced} questions have real ratings.` : 'Start a workout to replace the baseline with your own evidence.'}</p></article>
+        <article class="readiness-panel"><p class="eyebrow">Overall readiness</p><strong>${readiness.overall}%</strong><div class="meter"><span style="width:${readiness.overall}%"></span></div><p>${practiced ? (practiced === 1 ? '1 question has a real rating.' : `${practiced} questions have real ratings.`) : 'Start a workout to replace the baseline with your own evidence.'}</p></article>
         <article class="gap-panel"><p class="eyebrow">Biggest interview gap</p><h3>${escapeHtml(readiness.weakest.topic)}</h3><p>This topic has the lowest current confidence estimate and will surface more often.</p><button class="text-button" type="button" data-action="practice-topic" data-topic="${escapeHtml(readiness.weakest.topic)}">Practice this gap →</button></article>
         <article class="review-panel"><p class="eyebrow">Review today</p><strong>${due}</strong><p>${due ? 'concepts are due for spaced repetition.' : 'Nothing overdue. New ratings will start the schedule.'}</p><button class="text-button" type="button" data-action="open-deck" data-deck="due">Open review deck →</button></article>
       </div>
@@ -433,6 +433,7 @@ function boot() {
       if (nav.dataset.nav === 'lookup') return openLookup();
       location.hash = nav.dataset.nav;
       render(nav.dataset.nav);
+      window.scrollTo({ top: 0, behavior: 'auto' });
       return;
     }
     const action = event.target.closest('[data-action]')?.dataset.action;

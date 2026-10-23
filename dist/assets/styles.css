@@ -489,6 +489,8 @@ kbd { padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; backg
 @media (max-width: 560px) {
   .topbar { gap: 10px; }
   .topbar-actions { gap: 6px; }
+  .mobile-nav { overflow: hidden; }
+  .mobile-nav button { flex: 1 1 0; min-width: 0; padding: 0 3px; font-size: 10px; }
   .focus-toggle, .version-picker, .lookup-trigger { min-height: 40px; }
   .focus-toggle { padding: 0 9px; }
   .hero-card h2 { font-size: 38px; }
