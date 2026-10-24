@@ -90,7 +90,7 @@ export function renderTodayView({ state: rawState, questions: content = catalog,
         <p class="lede">${escapeHtml(t(lang, 'today.lede'))}</p>
         <div class="session-meta">
           <span><strong>${escapeHtml(t(lang, 'today.minutes'))}</strong></span>
-          <span><strong>${escapeHtml(countLabel(lang, blueprint.total))}</strong> ${escapeHtml(t(lang, 'today.sections'))}</span>
+          <span><strong>${escapeHtml(countLabel(lang, blueprint.total))}</strong> ${escapeHtml(t(lang, 'today.sections', { count: blueprint.stages.length }))}</span>
           <span><strong>${escapeHtml(due ? t(lang, 'today.dueCount', { count: due }) : t(lang, 'today.fresh'))}</strong></span>
         </div>
         <div class="button-row">

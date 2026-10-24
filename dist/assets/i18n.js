@@ -394,7 +394,7 @@ const es = {
 
 Object.assign(en, {
   'today.lede': 'A focused middle/senior workout with code reasoning, asynchronous behavior, browser fundamentals, and one senior decision. The structure stays familiar; the questions adapt to you.',
-  'today.minutes': '~18 minutes', 'today.prompts': '11 prompts', 'today.sections': 'across 5 sections',
+  'today.minutes': '~18 minutes', 'today.prompts': '11 prompts', 'today.sections': 'across {count} sections',
   'today.fresh': 'Fresh adaptive set', 'today.dueCount': '{count} due today',
   'today.readinessBody': 'The estimate changes only when you rate real practice.', 'today.nudgeBody': 'Name the decision boundary, the risk, and what you would measure.',
   'today.continueTitle': 'Signals & RxJS interoperability', 'today.continueBody': 'Separate synchronous UI state from async event workflows.',
@@ -436,7 +436,7 @@ Object.assign(en, {
 
 Object.assign(ru, {
   'today.lede': 'Тренировка middle/senior-уровня: разбор кода, асинхронное поведение, основы браузера и senior-решение. Структура знакомая, вопросы подстраиваются под вас.',
-  'today.minutes': '~18 минут', 'today.prompts': '11 вопросов', 'today.sections': 'в 5 разделах',
+  'today.minutes': '~18 минут', 'today.prompts': '11 вопросов', 'today.sections': 'в {count} разделах',
   'today.fresh': 'Новый адаптивный набор', 'today.dueCount': 'К повторению сегодня: {count}',
   'today.readinessBody': 'Оценка меняется только после вашей самооценки реальной практики.', 'today.nudgeBody': 'Назовите границу решения, риск и метрику.',
   'today.continueTitle': 'Совместная работа Signals и RxJS', 'today.continueBody': 'Отделите синхронное UI-состояние от асинхронных event workflow.',
@@ -477,7 +477,7 @@ Object.assign(ru, {
 
 Object.assign(es, {
   'today.lede': 'Un entrenamiento middle/senior con razonamiento sobre código, comportamiento asíncrono, fundamentos del navegador y una decisión senior. La estructura resulta familiar; las preguntas se adaptan a ti.',
-  'today.minutes': '~18 minutos', 'today.prompts': '11 preguntas', 'today.sections': 'en 5 secciones',
+  'today.minutes': '~18 minutos', 'today.prompts': '11 preguntas', 'today.sections': 'en {count} secciones',
   'today.fresh': 'Nueva selección adaptativa', 'today.dueCount': '{count} para hoy',
   'today.readinessBody': 'La estimación solo cambia al valorar práctica real.', 'today.nudgeBody': 'Nombra el límite de la decisión, el riesgo y qué medirías.',
   'today.continueTitle': 'Interoperabilidad entre Signals y RxJS', 'today.continueBody': 'Separa el estado síncrono de UI de los flujos asíncronos.',
