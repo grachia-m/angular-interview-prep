@@ -39,6 +39,33 @@ function renderRevealButton(action, label) {
   return `<button class="reveal-button" type="button" data-action="${action}"><span aria-hidden="true">＋</span>${escapeHtml(label)}</button>`;
 }
 
+export function chooseExampleFile(files = {}, requestedFile) {
+  const available = ['ts', 'html', 'scss'].filter((file) => typeof files[file] === 'string' && files[file].trim());
+  if (requestedFile && available.includes(requestedFile)) return requestedFile;
+  return available.includes('ts') ? 'ts' : available[0];
+}
+
+export function renderCodeExample({ item, locale = 'en', activeFile } = {}) {
+  if (!item?.example?.files) return '';
+  const lang = normalizeLocale(locale);
+  const files = item.example.files;
+  const selected = chooseExampleFile(files, activeFile);
+  if (!selected) return '';
+  const context = item.example.context?.[lang] || item.example.context?.en || '';
+  const tabs = ['ts', 'html', 'scss'].filter((file) => files[file]?.trim());
+  const tabId = `example-${item.id}-tab-${selected}`;
+  const panelId = `example-${item.id}-panel`;
+  return `<section class="code-example" aria-label="${escapeHtml(t(lang, 'workout.example'))}">
+    <p class="code-example-context">${escapeHtml(context)}</p>
+    <div class="code-tabs" role="tablist" aria-label="${escapeHtml(t(lang, 'example.tabs'))}">
+      ${tabs.map((file) => `<button id="example-${escapeHtml(item.id)}-tab-${file}" role="tab" type="button" data-action="select-example-file" data-file="${file}" aria-controls="${panelId}" aria-selected="${file === selected}" tabindex="${file === selected ? '0' : '-1'}">${escapeHtml(t(lang, `example.${file}`))}</button>`).join('')}
+    </div>
+    <div id="${panelId}" class="code-panel" role="tabpanel" aria-labelledby="${tabId}" tabindex="0">
+      <pre class="code-block"><code>${escapeHtml(files[selected])}</code></pre>
+    </div>
+  </section>`;
+}
+
 export function renderTodayView({ state: rawState, questions: content = catalog, now = new Date(), locale } = {}) {
   const state = normalizeState(rawState);
   const lang = activeLocale(locale, state);
@@ -105,7 +132,7 @@ export function renderTodayView({ state: rawState, questions: content = catalog,
     </section>`;
 }
 
-export function renderWorkoutView({ items = [], index = 0, state: rawState, reveal = {}, sessionKind = 'daily', locale } = {}) {
+export function renderWorkoutView({ items = [], index = 0, state: rawState, reveal = {}, sessionKind = 'daily', locale, activeExampleFile, exampleFiles = {} } = {}) {
   const state = normalizeState(rawState);
   const lang = activeLocale(locale, state);
   const item = items[index];
@@ -136,6 +163,7 @@ export function renderWorkoutView({ items = [], index = 0, state: rawState, reve
           ${reveal.hint ? `<div class="answer-panel hint-panel"><p class="answer-label">${escapeHtml(t(lang, 'workout.hintLabel'))}</p><p>${escapeHtml(copy.hint)}</p></div>` : renderRevealButton('reveal-hint', t(lang, 'workout.hint'))}
           ${reveal.points ? `<div class="answer-panel"><p class="answer-label">${escapeHtml(t(lang, 'workout.pointsLabel'))}</p><ul>${copy.keyPoints.map((point) => `<li>${escapeHtml(point)}</li>`).join('')}</ul></div>` : renderRevealButton('reveal-points', t(lang, 'workout.points'))}
           ${reveal.answer ? `<div class="answer-panel full-answer"><p class="answer-label">${escapeHtml(t(lang, 'workout.answerLabel'))}</p><p>${escapeHtml(copy.answer)}</p></div>` : renderRevealButton('reveal-answer', t(lang, 'workout.answer'))}
+          ${item.example ? (reveal.example ? renderCodeExample({ item, locale: lang, activeFile: exampleFiles[item.id] || activeExampleFile }) : renderRevealButton('reveal-example', t(lang, 'workout.example'))) : ''}
         </div>
         <div class="confidence-panel">
           <div><p class="answer-label">${escapeHtml(t(lang, 'confidence.title'))}</p><p>${escapeHtml(t(lang, 'confidence.body'))}</p></div>

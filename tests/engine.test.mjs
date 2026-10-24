@@ -209,6 +209,62 @@ test('index exposes localization hooks for every static visible control', () => 
   assert.match(markup, /data-i18n-placeholder="lookup\.placeholder"/);
 });
 
+test('code example defaults to TypeScript and shows only supplied files', () => {
+  const multi = questions.find(({ id }) => id === 'signal-input-contract');
+  const multiHtml = appViews.renderCodeExample({ item: multi, locale: 'en' });
+  assert.match(multiHtml, /data-file="ts"[^>]*aria-selected="true"/);
+  assert.match(multiHtml, /data-file="html"/);
+  assert.match(multiHtml, /data-file="scss"/);
+  const onlyTs = questions.find(({ id }) => id === 'share-replay-cache');
+  const onlyTsHtml = appViews.renderCodeExample({ item: onlyTs, locale: 'ru' });
+  assert.match(onlyTsHtml, /data-file="ts"/);
+  assert.doesNotMatch(onlyTsHtml, /data-file="html"|data-file="scss"/);
+});
+
+test('code example uses first available file when TypeScript is absent', () => {
+  const htmlOnly = questions.find(({ id }) => id === 'control-flow-track');
+  assert.equal(appViews.chooseExampleFile(htmlOnly.example.files), 'html');
+  assert.equal(appViews.chooseExampleFile(htmlOnly.example.files, 'scss'), 'html');
+  assert.match(appViews.renderCodeExample({ item: htmlOnly, locale: 'es' }), /data-file="html"[^>]*aria-selected="true"/);
+});
+
+test('code tabs expose tab semantics and selected state', () => {
+  const item = questions.find(({ id }) => id === 'signal-input-contract');
+  const html = appViews.renderCodeExample({ item, locale: 'es', activeFile: 'scss' });
+  assert.match(html, /role="tablist"/);
+  assert.match(html, /role="tab"[^>]*data-file="scss"[^>]*aria-selected="true"/);
+  assert.match(html, /role="tabpanel"/);
+  assert.match(html, /aria-labelledby="example-signal-input-contract-tab-scss"/);
+});
+
+test('code rendering escapes source markup', () => {
+  const item = questions.find(({ id }) => id === 'control-flow-track');
+  const html = appViews.renderCodeExample({ item, locale: 'en' });
+  assert.match(html, /&lt;user-row/);
+  assert.doesNotMatch(html, /<user-row/);
+});
+
+test('locale change preserves normalized progress identity', () => {
+  const progress = { 'signal-input-contract': { mastery: 72, confidence: 'knew', attempts: 2 } };
+  const before = normalizeState({ locale: 'en', bookmarks: ['signal-input-contract'], progress });
+  const after = normalizeState({ ...before, locale: 'es' });
+  assert.deepEqual(after.progress, before.progress);
+  assert.deepEqual(after.bookmarks, before.bookmarks);
+  assert.equal(after.locale, 'es');
+});
+
+test('workout reveal state is keyed independently from locale', () => {
+  const item = questions.find(({ id }) => id === 'signal-input-contract');
+  const reveal = { hint: true, answer: true, example: true };
+  const exampleFiles = { [item.id]: 'html' };
+  const russian = renderWorkoutView({ items: [item], index: 0, state: normalizeState({ locale: 'ru' }), locale: 'ru', reveal, exampleFiles });
+  const spanish = renderWorkoutView({ items: [item], index: 0, state: normalizeState({ locale: 'es' }), locale: 'es', reveal, exampleFiles });
+  assert.match(russian, /data-file="html"[^>]*aria-selected="true"/);
+  assert.match(spanish, /data-file="html"[^>]*aria-selected="true"/);
+  assert.match(russian, /Полезная подсказка/);
+  assert.match(spanish, /Una pista útil/);
+});
+
 test('Modern Focus ranks Angular 18–22 content ahead of legacy content', () => {
   const state = normalizeState({});
   const selected = selectWorkout(contentFixture, state, 'modern', { total: 5, now: '2026-10-23T09:00:00.000Z' });

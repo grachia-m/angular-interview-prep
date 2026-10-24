@@ -1,6 +1,6 @@
 import { lookupEntries, questions } from './data.js';
 import { sectionMeta } from './data.js';
-import { t } from './i18n.js';
+import { resolveInitialLocale, t } from './i18n.js';
 import {
   applyLocaleToDocument as viewApplyLocaleToDocument,
   modeLabel as viewModeLabel,
@@ -33,7 +33,9 @@ const STORAGE_KEY = 'angle-interview-state-v1';
 
 export {
   applyLocaleToDocument,
+  chooseExampleFile,
   renderDeckView,
+  renderCodeExample,
   renderLookupResults,
   renderMockQuestion,
   renderMockReport,
@@ -54,11 +56,14 @@ function escapeHtml(value) {
 }
 
 function loadState() {
-  if (typeof localStorage === 'undefined') return normalizeState({});
+  const browserLanguages = typeof navigator === 'undefined' ? [] : (navigator.languages || [navigator.language]);
+  if (typeof localStorage === 'undefined') return normalizeState({ locale: resolveInitialLocale(undefined, browserLanguages) });
   try {
-    return normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'));
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const savedLocale = ['en', 'ru', 'es'].includes(stored?.locale) ? stored.locale : undefined;
+    return normalizeState({ ...stored, locale: resolveInitialLocale(savedLocale, browserLanguages) });
   } catch {
-    return normalizeState({});
+    return normalizeState({ locale: resolveInitialLocale(undefined, browserLanguages) });
   }
 }
 
@@ -381,6 +386,7 @@ function renderLookupResults(query = '') {
 
 function boot() {
   let state = loadState();
+  saveState(state);
   let currentView = location.hash.replace('#', '') || 'today';
   let currentDeck = 'saved';
   let session = null;
@@ -430,7 +436,7 @@ function boot() {
   function startSession(items, kind = 'daily') {
     const fallbackMode = state.modernFocus ? 'modern' : state.versionMode;
     const selected = items?.length ? items : selectWorkout(questions, state, fallbackMode);
-    session = { items: selected, index: 0, reveal: {}, sessionKind: kind };
+    session = { items: selected, index: 0, reveal: {}, exampleFiles: {}, sessionKind: kind };
     location.hash = 'workout';
     render('workout');
     document.querySelector('#main-view')?.focus();
@@ -476,8 +482,13 @@ function boot() {
     if (action === 'start-workout') startSession();
     if (action === 'start-cram') startSession(selectCramSession(questions, state, { total: 10 }), 'cram');
     if (action === 'exit-workout' || action === 'back-today') { location.hash = 'today'; render('today'); }
-    if (action === 'reveal-hint' || action === 'reveal-points' || action === 'reveal-answer' || action === 'reveal-code') {
+    if (action === 'reveal-hint' || action === 'reveal-points' || action === 'reveal-answer' || action === 'reveal-example') {
       session.reveal[action.replace('reveal-', '')] = true;
+      render('workout');
+    }
+    if (action === 'select-example-file' && session) {
+      const item = session.items[session.index];
+      session.exampleFiles[item.id] = actionNode.dataset.file;
       render('workout');
     }
     if (action === 'toggle-save') {
@@ -555,6 +566,15 @@ function boot() {
   });
   focusInput.addEventListener('change', () => {
     state = { ...state, modernFocus: focusInput.checked };
+    saveState(state);
+    render();
+  });
+  localeSelect?.addEventListener('change', () => {
+    if (mock && !mock.complete) {
+      const item = mock.items[mock.index];
+      mock.answers[item.id] = document.querySelector('#mock-answer')?.value || mock.answers[item.id] || '';
+    }
+    state = { ...state, locale: localeSelect.value };
     saveState(state);
     render();
   });
