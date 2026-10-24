@@ -17,6 +17,7 @@ import {
   toggleBookmark,
 } from '../dist/assets/engine.js';
 import { questions, lookupEntries, sectionMeta } from '../dist/assets/data.js';
+import { frontendLookupEntries, frontendQuestions, frontendSectionMeta } from '../dist/assets/frontend-data.js';
 import {
   SUPPORTED_LOCALES,
   UI_MESSAGES,
@@ -76,9 +77,9 @@ test('every question has a supported stable track', () => {
 test('track filtering keeps Angular and mixed compatibility', () => {
   assert.equal(normalizeTrack('JAVASCRIPT'), 'javascript');
   assert.equal(normalizeTrack('other'), 'angular');
-  assert.deepEqual(filterByTrack(questions, 'angular').map(({ id }) => id), questions.map(({ id }) => id));
+  assert.deepEqual(filterByTrack(questions, 'angular').map(({ id }) => id), questions.filter(({ track }) => track === 'angular').map(({ id }) => id));
   assert.deepEqual(filterByTrack(questions, 'mixed').map(({ id }) => id), questions.map(({ id }) => id));
-  assert.deepEqual(filterByTrack(questions, 'javascript'), []);
+  assert.equal(filterByTrack(questions, 'javascript').length, 16);
 });
 
 test('resolveInitialLocale maps browser languages and falls back to English', () => {
@@ -116,7 +117,7 @@ test('all supported locales contain every interface message key', () => {
 });
 
 test('question ids remain stable across the catalog migration', () => {
-  assert.deepEqual(questions.map(({ id }) => id).sort(), [
+  assert.deepEqual(questions.filter(({ track }) => track === 'angular').map(({ id }) => id).sort(), [
     'control-flow-track', 'destroy-ref-lifecycle', 'effect-derived-state', 'flattening-operator-decision',
     'hydration-rollout', 'incremental-hydration-boundary', 'linked-signal-selection', 'ngrx-store-or-not',
     'onpush-real-boundary', 'provider-scope-route-tree', 'resource-read-boundary', 'share-replay-cache',
@@ -177,9 +178,9 @@ test('required questions expose valid structured examples', () => {
     'linked-signal-selection', 'zoneless-notifications', 'resource-read-boundary',
     'flattening-operator-decision', 'take-until-context',
   ].sort();
-  const withExamples = questions.filter(({ example }) => example).map(({ id }) => id).sort();
+  const withExamples = questions.filter(({ track, example }) => track === 'angular' && example).map(({ id }) => id).sort();
   assert.deepEqual(withExamples, expected);
-  for (const question of questions.filter(({ example }) => example)) {
+  for (const question of questions.filter(({ track, example }) => track === 'angular' && example)) {
     assert.ok(SUPPORTED_LOCALES.every((locale) => question.example.context[locale]?.trim()), `${question.id} needs localized context`);
     const files = Object.entries(question.example.files);
     assert.ok(files.length > 0);
@@ -188,6 +189,52 @@ test('required questions expose valid structured examples', () => {
   assert.ok(questions.some(({ example }) => ['ts', 'html', 'scss'].every((file) => example?.files[file])));
   assert.ok(questions.some(({ example }) => Object.keys(example?.files || {}).join(',') === 'ts'));
   assert.equal(getLocalizedContent(questions[0], 'xx').prompt, questions[0].content.en.prompt);
+});
+
+test('frontend catalog has the exact approved track counts', () => {
+  const count = (track) => frontendQuestions.filter((question) => question.track === track).length;
+  assert.equal(count('javascript'), 16);
+  assert.equal(count('html'), 6);
+  assert.equal(count('css'), 6);
+  assert.equal(frontendQuestions.length, 28);
+  assert.equal(new Set(frontendQuestions.map(({ id }) => id)).size, 28);
+});
+
+test('at least eight JavaScript questions cover async behavior', () => {
+  const asyncQuestions = frontendQuestions.filter(({ track, tags }) => track === 'javascript' && tags?.includes('async'));
+  assert.ok(asyncQuestions.length >= 8, `expected at least 8 async JavaScript questions, got ${asyncQuestions.length}`);
+  assert.ok(asyncQuestions.some(({ id }) => id.includes('promise')));
+  assert.ok(asyncQuestions.some(({ id }) => id.includes('event-loop')));
+});
+
+test('frontend content is complete in all locales', () => {
+  for (const question of frontendQuestions) {
+    assert.ok(question.id && question.topicKey && question.section && question.difficulty);
+    for (const locale of SUPPORTED_LOCALES) {
+      const copy = question.content?.[locale];
+      for (const field of ['type', 'topic', 'prompt', 'hint', 'answer']) assert.ok(copy?.[field]?.trim(), `${question.id}.${locale}.${field}`);
+      assert.ok(copy?.keyPoints?.length >= 2, `${question.id}.${locale}.keyPoints`);
+    }
+  }
+  assert.ok(frontendLookupEntries.length >= 8);
+  assert.ok(Object.keys(frontendSectionMeta).length >= 12);
+  for (const record of [...frontendLookupEntries, ...Object.values(frontendSectionMeta)]) {
+    assert.ok(SUPPORTED_LOCALES.every((locale) => record.content?.[locale]), 'localized frontend support record');
+  }
+});
+
+test('frontend examples use only supported nonempty files', () => {
+  const examples = frontendQuestions.filter(({ example }) => example);
+  assert.ok(examples.length >= 14);
+  for (const question of examples) {
+    assert.ok(SUPPORTED_LOCALES.every((locale) => question.example.context?.[locale]?.trim()), `${question.id} context`);
+    const files = Object.entries(question.example.files || {});
+    assert.ok(files.length > 0);
+    assert.ok(files.every(([file, source]) => ['js', 'ts', 'html', 'scss'].includes(file) && source.trim()));
+  }
+  const javascriptExample = examples.find(({ example }) => example.files.js && example.files.html);
+  assert.equal(appViews.chooseExampleFile(javascriptExample.example.files), 'js');
+  assert.match(appViews.renderCodeExample({ item: javascriptExample, locale: 'ru' }), /data-file="js"[^>]*aria-selected="true"/);
 });
 
 test('today and workout views render Russian content', () => {
@@ -351,10 +398,11 @@ test('readiness stays between 0 and 100 and reports the weakest topic', () => {
 });
 
 test('the seeded library covers every workout section and modern Angular versions', () => {
-  const sections = new Set(questions.map((item) => item.section));
+  const angularQuestions = questions.filter(({ track }) => track === 'angular');
+  const sections = new Set(angularQuestions.map((item) => item.section));
   assert.deepEqual([...sections].sort(), ['code', 'modern', 'rxjs', 'scenario', 'warmup']);
   for (const version of [18, 19, 20, 21, 22]) {
-    assert.ok(questions.some((item) => item.versions.includes(version)), `missing Angular ${version}`);
+    assert.ok(angularQuestions.some((item) => item.versions.includes(version)), `missing Angular ${version}`);
   }
 });
 

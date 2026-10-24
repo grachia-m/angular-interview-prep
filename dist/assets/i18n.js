@@ -116,6 +116,7 @@ const en = {
   'toast.saved': 'Saved for revision',
   'toast.removed': 'Removed from saved',
   'example.tabs': 'Example files',
+  'example.js': 'JavaScript',
   'example.ts': 'TypeScript',
   'example.html': 'HTML',
   'example.scss': 'SCSS',
@@ -234,6 +235,7 @@ const ru = {
   'toast.saved': 'Сохранено для повторения',
   'toast.removed': 'Удалено из сохранённого',
   'example.tabs': 'Файлы примера',
+  'example.js': 'JavaScript',
 };
 
 const es = {
@@ -349,6 +351,7 @@ const es = {
   'toast.saved': 'Guardada para repasar',
   'toast.removed': 'Quitada de guardadas',
   'example.tabs': 'Ficheros del ejemplo',
+  'example.js': 'JavaScript',
 };
 
 Object.assign(en, {

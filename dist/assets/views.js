@@ -40,9 +40,9 @@ function renderRevealButton(action, label) {
 }
 
 export function chooseExampleFile(files = {}, requestedFile) {
-  const available = ['ts', 'html', 'scss'].filter((file) => typeof files[file] === 'string' && files[file].trim());
+  const available = ['js', 'ts', 'html', 'scss'].filter((file) => typeof files[file] === 'string' && files[file].trim());
   if (requestedFile && available.includes(requestedFile)) return requestedFile;
-  return available.includes('ts') ? 'ts' : available[0];
+  return available.includes('js') ? 'js' : available.includes('ts') ? 'ts' : available[0];
 }
 
 export function renderCodeExample({ item, locale = 'en', activeFile } = {}) {
@@ -52,7 +52,7 @@ export function renderCodeExample({ item, locale = 'en', activeFile } = {}) {
   const selected = chooseExampleFile(files, activeFile);
   if (!selected) return '';
   const context = item.example.context?.[lang] || item.example.context?.en || '';
-  const tabs = ['ts', 'html', 'scss'].filter((file) => files[file]?.trim());
+  const tabs = ['js', 'ts', 'html', 'scss'].filter((file) => files[file]?.trim());
   const tabId = `example-${item.id}-tab-${selected}`;
   const panelId = `example-${item.id}-panel`;
   return `<section class="code-example" aria-label="${escapeHtml(t(lang, 'workout.example'))}">
