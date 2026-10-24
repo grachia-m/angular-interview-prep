@@ -8,11 +8,13 @@ import {
   calculateReadiness,
   filterByTrack,
   filterLookup,
+  getWorkoutBlueprint,
   getDeck,
   normalizeTrack,
   normalizeState,
   selectCramSession,
   selectMockQuestions,
+  selectTrackWorkout,
   selectWorkout,
   toggleBookmark,
 } from '../dist/assets/engine.js';
@@ -235,6 +237,52 @@ test('frontend examples use only supported nonempty files', () => {
   const javascriptExample = examples.find(({ example }) => example.files.js && example.files.html);
   assert.equal(appViews.chooseExampleFile(javascriptExample.example.files), 'js');
   assert.match(appViews.renderCodeExample({ item: javascriptExample, locale: 'ru' }), /data-file="js"[^>]*aria-selected="true"/);
+});
+
+test('each track workout follows its visible blueprint', () => {
+  for (const trackMode of ['angular', 'javascript', 'html', 'css']) {
+    const blueprint = getWorkoutBlueprint(trackMode);
+    const session = selectTrackWorkout(questions, normalizeState({ trackMode }), { trackMode, now: '2026-10-24T09:00:00.000Z' });
+    assert.equal(session.blueprint.id, blueprint.id);
+    assert.equal(session.items.length, blueprint.total);
+    assert.ok(session.items.every((item) => item.track === trackMode));
+    assert.equal(blueprint.stages.reduce((sum, stage) => sum + stage.count, 0), blueprint.total);
+  }
+});
+
+test('Interview Mix is JavaScript heavy and includes two async questions', () => {
+  const { items, blueprint } = selectTrackWorkout(questions, normalizeState({ trackMode: 'mixed' }), { trackMode: 'mixed', now: '2026-10-24T09:00:00.000Z' });
+  assert.equal(blueprint.id, 'mixed');
+  assert.equal(items.length, 11);
+  assert.ok(items.filter(({ track }) => track === 'javascript').length >= 6);
+  assert.ok(items.filter(({ tags }) => tags?.includes('async')).length >= 2);
+  assert.ok(items.some(({ track }) => track === 'angular'));
+  assert.ok(items.some(({ track }) => track === 'html'));
+  assert.ok(items.some(({ track }) => track === 'css'));
+});
+
+test('non Angular ranking ignores Angular version controls', () => {
+  const oldAngular = selectTrackWorkout(questions, normalizeState({ trackMode: 'javascript', versionMode: '16', modernFocus: true }), { trackMode: 'javascript' });
+  const newAngular = selectTrackWorkout(questions, normalizeState({ trackMode: 'javascript', versionMode: '22' }), { trackMode: 'javascript' });
+  assert.deepEqual(oldAngular.items.map(({ id }) => id), newAngular.items.map(({ id }) => id));
+});
+
+test('decks and readiness can filter by track', () => {
+  const angular = questions.find(({ track }) => track === 'angular');
+  const javascript = questions.find(({ track }) => track === 'javascript');
+  const state = normalizeState({ bookmarks: [angular.id, javascript.id], progress: { [angular.id]: { mastery: 90 }, [javascript.id]: { mastery: 20 } } });
+  assert.deepEqual(getDeck(questions, state, 'saved', new Date(), 'javascript').map(({ id }) => id), [javascript.id]);
+  const readiness = calculateReadiness(questions, state, 'javascript');
+  assert.ok(readiness.topics.every(({ topicKey }) => topicKey.startsWith('js-')));
+});
+
+test('track-aware mock selection keeps senior variety', () => {
+  const jsMock = selectMockQuestions(questions, 'senior', 6, 'javascript');
+  assert.ok(jsMock.every(({ track }) => track === 'javascript'));
+  assert.ok(jsMock.some(({ section }) => section === 'js-scenario'));
+  const mixed = selectMockQuestions(questions, 'senior', 6, 'mixed');
+  assert.ok(mixed.filter(({ track }) => track === 'javascript').length >= 3);
+  assert.ok(mixed.some(({ track }) => track === 'html' || track === 'css'));
 });
 
 test('today and workout views render Russian content', () => {

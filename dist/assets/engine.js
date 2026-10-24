@@ -14,6 +14,37 @@ export function filterByTrack(content, trackMode = 'angular') {
   return track === 'mixed' ? [...content] : content.filter((item) => item.track === track);
 }
 
+const WORKOUT_BLUEPRINTS = {
+  angular: { id: 'angular', total: 11, stages: [
+    { key: 'warmup', sections: ['warmup'], count: 3 }, { key: 'modern', sections: ['modern'], count: 3 },
+    { key: 'code', sections: ['code'], count: 2 }, { key: 'rxjs', sections: ['rxjs'], count: 2 },
+    { key: 'scenario', sections: ['scenario'], count: 1 },
+  ] },
+  javascript: { id: 'javascript', total: 10, stages: [
+    { key: 'js-runtime', sections: ['js-runtime'], count: 2 }, { key: 'js-functions', sections: ['js-functions'], count: 2 },
+    { key: 'js-async', sections: ['js-async'], count: 3 }, { key: 'js-code', sections: ['js-code'], count: 2 },
+    { key: 'js-scenario', sections: ['js-scenario'], count: 1 },
+  ] },
+  html: { id: 'html', total: 6, stages: [
+    { key: 'html-semantics', sections: ['html-semantics'], count: 1 }, { key: 'html-forms', sections: ['html-forms'], count: 1 },
+    { key: 'html-browser', sections: ['html-browser'], count: 2 }, { key: 'html-review', sections: ['html-review'], count: 1 },
+    { key: 'html-scenario', sections: ['html-scenario'], count: 1 },
+  ] },
+  css: { id: 'css', total: 6, stages: [
+    { key: 'css-cascade', sections: ['css-cascade'], count: 1 }, { key: 'css-layout', sections: ['css-layout'], count: 2 },
+    { key: 'css-responsive', sections: ['css-responsive'], count: 1 }, { key: 'css-review', sections: ['css-review'], count: 1 },
+    { key: 'css-scenario', sections: ['css-scenario'], count: 1 },
+  ] },
+  mixed: { id: 'mixed', total: 11, stages: [
+    { key: 'mix-warmup', count: 1 }, { key: 'mix-js-core', count: 2 }, { key: 'mix-js-async', count: 3 },
+    { key: 'mix-web', count: 3 }, { key: 'mix-angular', count: 1 }, { key: 'mix-scenario', count: 1 },
+  ] },
+};
+
+export function getWorkoutBlueprint(trackMode = 'angular') {
+  return WORKOUT_BLUEPRINTS[normalizeTrack(trackMode)];
+}
+
 const clamp = (value, min = 0, max = 100) => Math.min(max, Math.max(min, Number(value) || 0));
 
 export function normalizeState(input = {}) {
@@ -43,7 +74,8 @@ function masteryFor(item, state) {
 
 function itemScore(item, state, mode, now) {
   const record = state.progress?.[item.id] || {};
-  const modern = item.versions?.some((version) => version >= 18);
+  const angularItem = !item.track || item.track === 'angular';
+  const modern = angularItem && item.versions?.some((version) => version >= 18);
   const due = record.dueAt && new Date(record.dueAt).getTime() <= now.getTime();
   const selectedVersion = Number(mode);
 
@@ -52,9 +84,9 @@ function itemScore(item, state, mode, now) {
   score += due ? 48 : 0;
   score += (item.difficulty || 3) * 2;
 
-  if (mode === 'modern') score += modern ? 95 : 0;
-  if (mode === 'mixed') score += modern ? 22 : 0;
-  if (Number.isFinite(selectedVersion) && item.versions?.includes(selectedVersion)) score += 120;
+  if (angularItem && mode === 'modern') score += modern ? 95 : 0;
+  if (angularItem && mode === 'mixed') score += modern ? 22 : 0;
+  if (angularItem && Number.isFinite(selectedVersion) && item.versions?.includes(selectedVersion)) score += 120;
   return score;
 }
 
@@ -88,6 +120,37 @@ export function selectWorkout(content, rawState, mode = 'mixed', options = {}) {
   return selected.slice(0, total);
 }
 
+export function selectTrackWorkout(content, rawState, options = {}) {
+  const state = normalizeState(rawState);
+  const trackMode = normalizeTrack(options.trackMode ?? state.trackMode);
+  const blueprint = getWorkoutBlueprint(trackMode);
+  const now = options.now || new Date();
+  const angularMode = state.modernFocus ? 'modern' : state.versionMode;
+  const selected = [];
+  const seen = new Set();
+  const addRanked = (candidates, count) => {
+    const ranked = selectWorkout(candidates.filter((item) => !seen.has(item.id)), state, angularMode, { total: Math.max(count, candidates.length), now, structured: false });
+    ranked.slice(0, count).forEach((item) => { seen.add(item.id); selected.push(item); });
+  };
+
+  if (trackMode !== 'mixed') {
+    const scoped = filterByTrack(content, trackMode);
+    for (const stage of blueprint.stages) addRanked(scoped.filter((item) => stage.sections.includes(item.section)), stage.count);
+    return { items: selected.slice(0, blueprint.total), blueprint };
+  }
+
+  const javascript = content.filter((item) => item.track === 'javascript');
+  const nonAsync = javascript.filter((item) => !item.tags?.includes('async'));
+  addRanked(nonAsync, 1);
+  addRanked(nonAsync, 2);
+  addRanked(javascript.filter((item) => item.tags?.includes('async')), 3);
+  addRanked(content.filter((item) => item.track === 'html'), 2);
+  addRanked(content.filter((item) => item.track === 'css'), 1);
+  addRanked(content.filter((item) => item.track === 'angular' && item.section !== 'scenario'), 1);
+  addRanked(content.filter((item) => item.track === 'angular' && item.section === 'scenario'), 1);
+  return { items: selected.slice(0, blueprint.total), blueprint };
+}
+
 export function applyRating(rawState, item, rating, now = new Date()) {
   const state = normalizeState(rawState);
   const current = state.progress[item.id] || {};
@@ -119,12 +182,13 @@ export function applyRating(rawState, item, rating, now = new Date()) {
   };
 }
 
-export function calculateReadiness(content, rawState) {
+export function calculateReadiness(content, rawState, trackMode) {
   const state = normalizeState(rawState);
+  const scopedContent = trackMode ? filterByTrack(content, trackMode) : content;
   const topicScores = new Map();
   const topicLabels = new Map();
 
-  for (const item of content) {
+  for (const item of scopedContent) {
     const topicKey = item.topicKey || item.topic || 'no-data';
     const values = topicScores.get(topicKey) || [];
     values.push(masteryFor(item, state));
@@ -175,27 +239,28 @@ export function toggleBookmark(rawState, itemId) {
   };
 }
 
-export function getDeck(content, rawState, deck, now = new Date()) {
+export function getDeck(content, rawState, deck, now = new Date(), trackMode) {
   const state = normalizeState(rawState);
   const safeNow = now instanceof Date ? now : new Date(now);
-  if (deck === 'saved') return content.filter((item) => state.bookmarks.includes(item.id));
-  if (deck === 'modern') return content.filter((item) => item.versions?.some((version) => version >= 18));
-  if (deck === 'hard') return content.filter((item) => (item.difficulty || 0) >= 4);
+  const scoped = trackMode ? filterByTrack(content, trackMode) : content;
+  if (deck === 'saved') return scoped.filter((item) => state.bookmarks.includes(item.id));
+  if (deck === 'modern') return scoped.filter((item) => item.versions?.some((version) => version >= 18));
+  if (deck === 'hard') return scoped.filter((item) => (item.difficulty || 0) >= 4);
   if (deck === 'due') {
-    return content.filter((item) => {
+    return scoped.filter((item) => {
       const dueAt = state.progress[item.id]?.dueAt;
       return dueAt && new Date(dueAt).getTime() <= safeNow.getTime();
     });
   }
   if (deck === 'mistakes') {
-    return content
+    return scoped
       .filter((item) => (Number(state.progress[item.id]?.mistakes) || 0) > 0)
       .sort((a, b) => {
         const mistakes = (state.progress[b.id]?.mistakes || 0) - (state.progress[a.id]?.mistakes || 0);
         return mistakes || masteryFor(a, state) - masteryFor(b, state);
       });
   }
-  return content;
+  return scoped;
 }
 
 export function selectCramSession(content, rawState, options = {}) {
@@ -227,11 +292,12 @@ export function selectCramSession(content, rawState, options = {}) {
   return result.slice(0, total);
 }
 
-export function selectMockQuestions(content, level = 'middle', total = 6) {
+export function selectMockQuestions(content, level = 'middle', total = 6, trackMode) {
   const count = Math.max(1, Number(total) || 6);
   const direction = level === 'senior' ? -1 : 1;
-  const ranked = [...content].sort((a, b) => direction * ((a.difficulty || 0) - (b.difficulty || 0)) || a.id.localeCompare(b.id));
-  const sections = ['warmup', 'modern', 'code', 'rxjs', 'scenario'];
+  const normalizedTrack = trackMode ? normalizeTrack(trackMode) : null;
+  const scoped = normalizedTrack ? filterByTrack(content, normalizedTrack) : content;
+  const ranked = [...scoped].sort((a, b) => direction * ((a.difficulty || 0) - (b.difficulty || 0)) || a.id.localeCompare(b.id));
   const selected = [];
   const seen = new Set();
   const add = (item) => {
@@ -240,7 +306,19 @@ export function selectMockQuestions(content, level = 'middle', total = 6) {
       selected.push(item);
     }
   };
-  sections.forEach((section) => add(ranked.find((item) => item.section === section)));
+  if (normalizedTrack === 'mixed') {
+    add(ranked.find((item) => item.track === 'javascript' && item.section === 'js-scenario'));
+    for (const item of ranked.filter((candidate) => candidate.track === 'javascript')) {
+      if (selected.filter((candidate) => candidate.track === 'javascript').length >= 3) break;
+      add(item);
+    }
+    add(ranked.find((item) => item.track === 'html'));
+    add(ranked.find((item) => item.track === 'css'));
+    add(ranked.find((item) => item.track === 'angular'));
+  } else {
+    const stages = normalizedTrack ? getWorkoutBlueprint(normalizedTrack).stages : ['warmup', 'modern', 'code', 'rxjs', 'scenario'].map((key) => ({ sections: [key] }));
+    stages.forEach((stage) => add(ranked.find((item) => stage.sections?.includes(item.section))));
+  }
   ranked.forEach(add);
   return selected.slice(0, count);
 }
