@@ -165,7 +165,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   color: var(--muted);
   cursor: pointer;
 }
-.lookup-trigger span { font-size: 22px; line-height: 0; }
+.lookup-trigger > span[aria-hidden="true"] { font-size: 22px; line-height: 0; }
 kbd { padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper-strong); color: var(--faint); font-family: inherit; font-size: 10px; box-shadow: 0 1px 0 var(--line); }
 .version-picker { display: flex; align-items: center; padding-left: 12px; color: var(--muted); font-size: 13px; }
 .version-picker select { height: 42px; border: 0; background: transparent; color: var(--ink); font-weight: 750; cursor: pointer; }
@@ -510,8 +510,9 @@ kbd { padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; backg
 }
 
 @media (max-width: 560px) {
-  .topbar { gap: 10px; }
-  .topbar-actions { gap: 6px; }
+  .topbar { align-items: stretch; flex-direction: column; gap: 10px; }
+  .topbar-actions { flex-wrap: nowrap; justify-content: flex-start; gap: 6px; }
+  .lookup-trigger > span:not([aria-hidden]) { display: none; }
   .mobile-nav { overflow-x: auto; }
   .mobile-nav button { flex: 1 1 0; min-width: 0; padding: 0 3px; font-size: 10px; }
   .focus-toggle, .version-picker, .lookup-trigger, .locale-control { min-height: 40px; }

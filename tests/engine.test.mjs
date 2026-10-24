@@ -265,6 +265,11 @@ test('workout reveal state is keyed independently from locale', () => {
   assert.match(spanish, /Una pista útil/);
 });
 
+test('saved navigation always resolves to the bookmarks deck', () => {
+  assert.equal(appViews.resolveNavigationDeck('saved', 'modern'), 'saved');
+  assert.equal(appViews.resolveNavigationDeck('practice', 'mistakes'), 'mistakes');
+});
+
 test('Modern Focus ranks Angular 18–22 content ahead of legacy content', () => {
   const state = normalizeState({});
   const selected = selectWorkout(contentFixture, state, 'modern', { total: 5, now: '2026-10-23T09:00:00.000Z' });
@@ -470,6 +475,13 @@ test('progress view uses singular copy after the first rated question', () => {
 test('modern focus keeps an accessible name when its visible mobile label is hidden', () => {
   const markup = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
   assert.match(markup, /id="modern-focus"[^>]*aria-label="Modern focus"/);
+});
+
+test('mobile header stacks the page title above its controls', () => {
+  const styles = readFileSync(new URL('../dist/assets/styles.css', import.meta.url), 'utf8');
+  const mobileRules = styles.slice(styles.indexOf('@media (max-width: 560px)'));
+  assert.match(mobileRules, /\.topbar\s*\{[^}]*flex-direction:\s*column;/);
+  assert.match(mobileRules, /\.lookup-trigger\s*>\s*span:not\(\[aria-hidden\]\)\s*\{[^}]*display:\s*none;/);
 });
 
 let failures = 0;

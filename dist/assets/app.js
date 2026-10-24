@@ -31,6 +31,10 @@ import {
 
 const STORAGE_KEY = 'angle-interview-state-v1';
 
+export function resolveNavigationDeck(nav, currentDeck) {
+  return nav === 'saved' ? 'saved' : currentDeck;
+}
+
 export {
   applyLocaleToDocument,
   chooseExampleFile,
@@ -469,6 +473,7 @@ function boot() {
     const nav = event.target.closest('[data-nav]');
     if (nav) {
       if (nav.dataset.nav === 'lookup') return openLookup();
+      currentDeck = resolveNavigationDeck(nav.dataset.nav, currentDeck);
       location.hash = nav.dataset.nav;
       render(nav.dataset.nav);
       window.scrollTo({ top: 0, behavior: 'auto' });
