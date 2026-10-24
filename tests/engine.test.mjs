@@ -15,6 +15,15 @@ import {
 } from '../dist/assets/engine.js';
 import { questions, lookupEntries } from '../dist/assets/data.js';
 import {
+  SUPPORTED_LOCALES,
+  UI_MESSAGES,
+  documentLanguage,
+  getDocumentMetadata,
+  normalizeLocale,
+  resolveInitialLocale,
+  t,
+} from '../dist/assets/i18n.js';
+import {
   renderDeckView,
   renderMockQuestion,
   renderMockReport,
@@ -35,6 +44,48 @@ const contentFixture = [
   { id: 'modern-b', section: 'modern', topic: 'Zoneless', versions: [20, 21], difficulty: 4 },
   { id: 'modern-c', section: 'modern', topic: 'Resources', versions: [22], difficulty: 4 },
 ];
+
+test('normalizeState persists only supported locales', () => {
+  assert.equal(normalizeState({ locale: 'ru' }).locale, 'ru');
+  assert.equal(normalizeState({ locale: 'es' }).locale, 'es');
+  assert.equal(normalizeState({ locale: 'fr' }).locale, 'en');
+  assert.equal(normalizeState(null).locale, 'en');
+  assert.equal(normalizeLocale('ES-es'), 'es');
+});
+
+test('resolveInitialLocale maps browser languages and falls back to English', () => {
+  assert.equal(resolveInitialLocale('ru', ['es-ES']), 'ru');
+  assert.equal(resolveInitialLocale(undefined, ['fr-FR', 'es-ES']), 'es');
+  assert.equal(resolveInitialLocale(undefined, ['ru-RU']), 'ru');
+  assert.equal(resolveInitialLocale(undefined, ['en-GB']), 'en');
+  assert.equal(resolveInitialLocale(undefined, ['fr-FR']), 'en');
+});
+
+test('documentLanguage expands Spanish to es-ES', () => {
+  assert.equal(documentLanguage('es'), 'es-ES');
+  assert.equal(documentLanguage('ru'), 'ru');
+  assert.equal(documentLanguage('unknown'), 'en');
+});
+
+test('translator interpolates variables and falls back to English', () => {
+  assert.equal(t('ru', 'workout.questionOf', { current: 2, total: 11 }), 'вопрос 2 из 11');
+  assert.equal(t('fr', 'nav.today'), 'Today');
+  assert.equal(t('ru', 'test.englishFallback'), 'English fallback');
+  assert.deepEqual(getDocumentMetadata('es'), {
+    title: 'Preparación para entrevistas de Angular',
+    description: 'Entrenamiento adaptativo para entrevistas de Angular 16–22.',
+  });
+});
+
+test('all supported locales contain every interface message key', () => {
+  const englishKeys = Object.keys(UI_MESSAGES.en).sort();
+  assert.deepEqual(SUPPORTED_LOCALES, ['en', 'ru', 'es']);
+  assert.ok(englishKeys.length > 80, 'the interface dictionary should cover every view, not only the selector');
+  for (const locale of SUPPORTED_LOCALES) {
+    assert.deepEqual(Object.keys(UI_MESSAGES[locale]).sort(), englishKeys, `incomplete ${locale} interface dictionary`);
+    assert.ok(englishKeys.every((key) => String(UI_MESSAGES[locale][key]).trim()), `empty ${locale} message`);
+  }
+});
 
 test('Modern Focus ranks Angular 18–22 content ahead of legacy content', () => {
   const state = normalizeState({});

@@ -1,3 +1,5 @@
+import { normalizeLocale } from './i18n.js';
+
 const DAY = 86_400_000;
 const VALID_MODES = new Set(['mixed', 'modern', '16', '17', '18', '19', '20', '21', '22']);
 
@@ -10,6 +12,7 @@ export function normalizeState(input = {}) {
     : {};
 
   return {
+    locale: normalizeLocale(source.locale),
     versionMode: VALID_MODES.has(String(source.versionMode)) ? String(source.versionMode) : 'mixed',
     modernFocus: source.modernFocus === true,
     bookmarks: Array.isArray(source.bookmarks) ? source.bookmarks.filter((id) => typeof id === 'string') : [],
