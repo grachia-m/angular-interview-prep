@@ -1,5 +1,21 @@
 import { lookupEntries, questions } from './data.js';
 import { sectionMeta } from './data.js';
+import { t } from './i18n.js';
+import {
+  applyLocaleToDocument as viewApplyLocaleToDocument,
+  modeLabel as viewModeLabel,
+  renderDeckView as viewRenderDeckView,
+  renderLookupResults as viewRenderLookupResults,
+  renderMockQuestion as viewRenderMockQuestion,
+  renderMockReport as viewRenderMockReport,
+  renderMockSetup as viewRenderMockSetup,
+  renderPlaceholder as viewRenderPlaceholder,
+  renderPracticeHub as viewRenderPracticeHub,
+  renderProgressView as viewRenderProgressView,
+  renderReviewView as viewRenderReviewView,
+  renderTodayView as viewRenderTodayView,
+  renderWorkoutView as viewRenderWorkoutView,
+} from './views.js';
 import {
   applyRating,
   buildMockReport,
@@ -14,6 +30,19 @@ import {
 } from './engine.js';
 
 const STORAGE_KEY = 'angle-interview-state-v1';
+
+export {
+  applyLocaleToDocument,
+  renderDeckView,
+  renderLookupResults,
+  renderMockQuestion,
+  renderMockReport,
+  renderMockSetup,
+  renderProgressView,
+  renderReviewView,
+  renderTodayView,
+  renderWorkoutView,
+} from './views.js';
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -46,7 +75,7 @@ function modeLabel(state) {
   return state.versionMode === 'mixed' ? 'Mixed' : `Angular ${state.versionMode}`;
 }
 
-export function renderTodayView({ state: rawState, questions: content, now = new Date() }) {
+function renderTodayView({ state: rawState, questions: content, now = new Date() }) {
   const state = normalizeState(rawState);
   const readiness = calculateReadiness(content, state);
   const due = dueCount(state, now);
@@ -132,7 +161,7 @@ function renderRevealButton(action, label) {
   return `<button class="reveal-button" type="button" data-action="${action}"><span aria-hidden="true">＋</span>${label}</button>`;
 }
 
-export function renderWorkoutView({ items, index, state: rawState, reveal = {}, sessionKind = 'daily' }) {
+function renderWorkoutView({ items, index, state: rawState, reveal = {}, sessionKind = 'daily' }) {
   const state = normalizeState(rawState);
   const item = items[index];
   if (!item) return renderReviewView({ items, state });
@@ -183,7 +212,7 @@ export function renderWorkoutView({ items, index, state: rawState, reveal = {}, 
     </section>`;
 }
 
-export function renderReviewView({ items, state: rawState }) {
+function renderReviewView({ items, state: rawState }) {
   const state = normalizeState(rawState);
   const strong = items.filter((item) => ['easy', 'knew'].includes(state.progress[item.id]?.confidence));
   const repeat = items.filter((item) => ['unsure', 'missed'].includes(state.progress[item.id]?.confidence));
@@ -212,7 +241,7 @@ export function renderReviewView({ items, state: rawState }) {
 
 const deckNames = { saved: 'Saved', mistakes: 'Mistakes', modern: 'Modern Angular', hard: 'Hard questions', due: 'Review today' };
 
-export function renderDeckView({ deck, items, state: rawState }) {
+function renderDeckView({ deck, items, state: rawState }) {
   const state = normalizeState(rawState);
   const title = deckNames[deck] || 'Practice deck';
   const emptyCopy = deck === 'saved' ? 'Nothing saved yet' : 'No cards here yet';
@@ -249,7 +278,7 @@ function renderPracticeHub(state) {
     </section>`;
 }
 
-export function renderMockSetup() {
+function renderMockSetup() {
   return `
     <section class="mock-setup">
       <header class="view-intro"><p class="eyebrow">No answers until the end</p><h2>30 min mock interview</h2><p>Six questions, one at a time. Speak your answer out loud, leave yourself a short note, and judge coverage—not charisma.</p></header>
@@ -268,7 +297,7 @@ export function renderMockSetup() {
     </section>`;
 }
 
-export function renderMockQuestion({ items, index, level, answers = {} }) {
+function renderMockQuestion({ items, index, level, answers = {} }) {
   const item = items[index];
   const progress = Math.round(((index + 1) / items.length) * 100);
   return `
@@ -289,7 +318,7 @@ export function renderMockQuestion({ items, index, level, answers = {} }) {
     </section>`;
 }
 
-export function renderMockReport(report) {
+function renderMockReport(report) {
   const list = (entries, fallback) => entries.length
     ? `<ul class="report-topics">${entries.map((entry) => `<li><span>${escapeHtml(entry.topic)}</span><small>${escapeHtml(entry.assessment)}</small></li>`).join('')}</ul>`
     : `<p class="result-empty">${fallback}</p>`;
@@ -305,7 +334,7 @@ export function renderMockReport(report) {
     </section>`;
 }
 
-export function renderProgressView({ state: rawState, questions: content, now = new Date() }) {
+function renderProgressView({ state: rawState, questions: content, now = new Date() }) {
   const state = normalizeState(rawState);
   const readiness = calculateReadiness(content, state);
   const modern = calculateReadiness(content.filter((item) => item.versions.some((version) => version >= 18)), state);
@@ -360,6 +389,7 @@ function boot() {
   const pageTitle = document.querySelector('#page-title');
   const versionSelect = document.querySelector('#version-mode');
   const focusInput = document.querySelector('#modern-focus');
+  const localeSelect = document.querySelector('#locale-select');
   const sidebarMode = document.querySelector('#sidebar-mode');
   const lookupDialog = document.querySelector('#lookup-dialog');
   const lookupInput = document.querySelector('#lookup-input');
@@ -368,7 +398,9 @@ function boot() {
   function syncControls() {
     versionSelect.value = state.versionMode;
     focusInput.checked = state.modernFocus;
-    sidebarMode.textContent = modeLabel(state);
+    if (localeSelect) localeSelect.value = state.locale;
+    sidebarMode.textContent = viewModeLabel(state, state.locale);
+    viewApplyLocaleToDocument(state.locale);
   }
 
   function setActiveNav(view) {
@@ -377,20 +409,20 @@ function boot() {
 
   function render(view = currentView) {
     currentView = view;
-    const titles = { today: 'Today', practice: 'Practice', workout: 'Practice', review: 'Review', mock: 'Mock interview', saved: 'Saved', progress: 'Progress' };
-    pageTitle.textContent = titles[view] || 'Today';
-    if (view === 'today') viewNode.innerHTML = renderTodayView({ state, questions });
-    else if (view === 'practice') viewNode.innerHTML = renderPracticeHub(state);
-    else if (view === 'workout' && session) viewNode.innerHTML = renderWorkoutView({ ...session, state });
-    else if (view === 'review' && session) viewNode.innerHTML = renderReviewView({ items: session.items, state });
-    else if (view === 'saved') viewNode.innerHTML = renderDeckView({ deck: currentDeck, items: getDeck(questions, state, currentDeck), state });
+    const titleKeys = { today: 'page.today', practice: 'page.practice', workout: 'page.practice', review: 'page.review', mock: 'page.mock', saved: 'page.saved', progress: 'page.progress' };
+    pageTitle.textContent = t(state.locale, titleKeys[view] || 'page.today');
+    if (view === 'today') viewNode.innerHTML = viewRenderTodayView({ state, questions, locale: state.locale });
+    else if (view === 'practice') viewNode.innerHTML = viewRenderPracticeHub(state, state.locale);
+    else if (view === 'workout' && session) viewNode.innerHTML = viewRenderWorkoutView({ ...session, state, locale: state.locale });
+    else if (view === 'review' && session) viewNode.innerHTML = viewRenderReviewView({ items: session.items, state, locale: state.locale });
+    else if (view === 'saved') viewNode.innerHTML = viewRenderDeckView({ deck: currentDeck, items: getDeck(questions, state, currentDeck), state, locale: state.locale });
     else if (view === 'mock') {
-      if (!mock) viewNode.innerHTML = renderMockSetup();
-      else if (mock.complete) viewNode.innerHTML = renderMockReport(buildMockReport(mock.items, mock.assessments, state));
-      else viewNode.innerHTML = renderMockQuestion(mock);
+      if (!mock) viewNode.innerHTML = viewRenderMockSetup({ locale: state.locale });
+      else if (mock.complete) viewNode.innerHTML = viewRenderMockReport(buildMockReport(mock.items, mock.assessments, state), state.locale);
+      else viewNode.innerHTML = viewRenderMockQuestion({ ...mock, locale: state.locale });
     }
-    else if (view === 'progress') viewNode.innerHTML = renderProgressView({ state, questions });
-    else viewNode.innerHTML = renderPlaceholder(view);
+    else if (view === 'progress') viewNode.innerHTML = viewRenderProgressView({ state, questions, locale: state.locale });
+    else viewNode.innerHTML = viewRenderPlaceholder(view, state.locale);
     setActiveNav(['workout', 'review'].includes(view) ? 'practice' : view);
     syncControls();
   }
@@ -422,7 +454,7 @@ function boot() {
   }
 
   function openLookup() {
-    lookupResults.innerHTML = renderLookupResults('');
+    lookupResults.innerHTML = viewRenderLookupResults('', state.locale);
     lookupDialog.showModal();
     requestAnimationFrame(() => lookupInput.focus());
   }
@@ -452,7 +484,7 @@ function boot() {
       const itemId = actionNode.dataset.id || session?.items?.[session.index]?.id;
       state = toggleBookmark(state, itemId);
       saveState(state);
-      showToast(state.bookmarks.includes(itemId) ? 'Saved for revision' : 'Removed from saved');
+      showToast(t(state.locale, state.bookmarks.includes(itemId) ? 'toast.saved' : 'toast.removed'));
       render(currentView);
     }
     if (action === 'rate' && session) {
@@ -482,8 +514,8 @@ function boot() {
       render('saved');
     }
     if (action === 'practice-topic') {
-      const topic = actionNode.dataset.topic || '';
-      const filtered = questions.filter((item) => `${item.topic} ${item.prompt}`.toLowerCase().includes(topic.toLowerCase().split(' ')[0]));
+      const topicKey = actionNode.dataset.topicKey || '';
+      const filtered = questions.filter((item) => item.topicKey === topicKey);
       startSession(filtered.slice(0, 6), 'focused');
     }
     if (action === 'practice-weak') {
@@ -526,7 +558,7 @@ function boot() {
     saveState(state);
     render();
   });
-  lookupInput.addEventListener('input', () => { lookupResults.innerHTML = renderLookupResults(lookupInput.value); });
+  lookupInput.addEventListener('input', () => { lookupResults.innerHTML = viewRenderLookupResults(lookupInput.value, state.locale); });
   window.addEventListener('hashchange', () => render(location.hash.replace('#', '') || 'today'));
   window.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openLookup(); }

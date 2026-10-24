@@ -34,6 +34,7 @@ import {
   renderTodayView,
   renderWorkoutView,
 } from '../dist/assets/app.js';
+import * as appViews from '../dist/assets/app.js';
 
 const cases = [];
 const test = (name, fn) => cases.push({ name, fn });
@@ -161,6 +162,51 @@ test('required questions expose valid structured examples', () => {
   assert.ok(questions.some(({ example }) => ['ts', 'html', 'scss'].every((file) => example?.files[file])));
   assert.ok(questions.some(({ example }) => Object.keys(example?.files || {}).join(',') === 'ts'));
   assert.equal(getLocalizedContent(questions[0], 'xx').prompt, questions[0].content.en.prompt);
+});
+
+test('today and workout views render Russian content', () => {
+  const state = normalizeState({ locale: 'ru' });
+  const today = renderTodayView({ state, questions, locale: 'ru', now: new Date('2026-10-23T09:00:00.000Z') });
+  assert.match(today, /Готовы к сегодняшней тренировке/);
+  assert.match(today, /Современный Angular/);
+  const item = questions.find(({ id }) => id === 'signal-input-contract');
+  const workout = renderWorkoutView({ items: [item], index: 0, state, locale: 'ru', reveal: { hint: true } });
+  assert.match(workout, /Вы заменяете @Input/);
+  assert.match(workout, /Полезная подсказка/);
+  assert.match(workout, /Не уверен/);
+});
+
+test('mock progress lookup and decks render Spain Spanish content', () => {
+  const state = normalizeState({ locale: 'es', bookmarks: [questions[0].id] });
+  assert.match(renderMockSetup({ locale: 'es' }), /Entrevista simulada/);
+  assert.match(renderProgressView({ state, questions, locale: 'es' }), /Mayor carencia para la entrevista/);
+  assert.match(renderDeckView({ deck: 'saved', items: [questions[0]], state, locale: 'es' }), /Guardadas/);
+  assert.equal(typeof appViews.renderLookupResults, 'function');
+  assert.match(appViews.renderLookupResults('entrada de señal', 'es'), /Úsalo cuando/);
+});
+
+test('localized renderers fall back to English', () => {
+  const html = renderTodayView({ state: normalizeState({ locale: 'en' }), questions, locale: 'fr' });
+  assert.match(html, /Ready for today’s workout/);
+  assert.doesNotMatch(html, /Готовы|¿Listo/);
+});
+
+test('rendered topic labels do not expose topic keys', () => {
+  const state = normalizeState({ locale: 'ru' });
+  const html = renderProgressView({ state, questions, locale: 'ru' });
+  assert.match(html, /Внедрение зависимостей/);
+  assert.doesNotMatch(html, />dependency-injection</);
+  assert.match(html, /data-topic-key="[a-z-]+"/);
+});
+
+test('index exposes localization hooks for every static visible control', () => {
+  const markup = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
+  assert.match(markup, /id="locale-select"/);
+  assert.match(markup, /data-i18n="nav\.today"/);
+  assert.match(markup, /data-i18n="controls\.mixed"/);
+  assert.match(markup, /data-i18n="controls\.modernFocus"/);
+  assert.match(markup, /data-i18n-aria="controls\.locale"/);
+  assert.match(markup, /data-i18n-placeholder="lookup\.placeholder"/);
 });
 
 test('Modern Focus ranks Angular 18–22 content ahead of legacy content', () => {
