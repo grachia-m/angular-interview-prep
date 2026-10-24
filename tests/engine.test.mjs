@@ -13,12 +13,13 @@ import {
   selectWorkout,
   toggleBookmark,
 } from '../dist/assets/engine.js';
-import { questions, lookupEntries } from '../dist/assets/data.js';
+import { questions, lookupEntries, sectionMeta } from '../dist/assets/data.js';
 import {
   SUPPORTED_LOCALES,
   UI_MESSAGES,
   documentLanguage,
   getDocumentMetadata,
+  getLocalizedContent,
   normalizeLocale,
   resolveInitialLocale,
   t,
@@ -87,6 +88,81 @@ test('all supported locales contain every interface message key', () => {
   }
 });
 
+test('question ids remain stable across the catalog migration', () => {
+  assert.deepEqual(questions.map(({ id }) => id).sort(), [
+    'control-flow-track', 'destroy-ref-lifecycle', 'effect-derived-state', 'flattening-operator-decision',
+    'hydration-rollout', 'incremental-hydration-boundary', 'linked-signal-selection', 'ngrx-store-or-not',
+    'onpush-real-boundary', 'provider-scope-route-tree', 'resource-read-boundary', 'share-replay-cache',
+    'signal-input-contract', 'signal-observable-boundary', 'signals-migration-150-screens',
+    'take-until-context', 'zoneless-notifications',
+  ]);
+});
+
+test('every question lookup and section has complete en ru es content', () => {
+  const questionFields = ['type', 'topic', 'prompt', 'hint', 'keyPoints', 'answer'];
+  for (const question of questions) {
+    assert.ok(question.topicKey, `${question.id} needs a stable topicKey`);
+    for (const locale of SUPPORTED_LOCALES) {
+      const content = question.content?.[locale];
+      assert.ok(content, `${question.id} missing ${locale}`);
+      for (const field of questionFields) assert.ok(content[field]?.length, `${question.id}.${locale}.${field} is empty`);
+    }
+  }
+  for (const entry of lookupEntries) {
+    for (const locale of SUPPORTED_LOCALES) {
+      for (const field of ['title', 'useWhen', 'typical', 'trap']) {
+        assert.ok(entry.content?.[locale]?.[field]?.length, `${entry.id}.${locale}.${field} is empty`);
+      }
+    }
+  }
+  for (const [section, meta] of Object.entries(sectionMeta)) {
+    for (const locale of SUPPORTED_LOCALES) {
+      assert.ok(meta.content?.[locale]?.label, `${section}.${locale}.label is empty`);
+      assert.ok(meta.content?.[locale]?.description, `${section}.${locale}.description is empty`);
+    }
+  }
+});
+
+test('adaptive calculations use topicKey instead of translated labels', () => {
+  const localizedFixture = [
+    { id: 'a', topicKey: 'signals', topic: 'Signals', versions: [22], content: { ru: { topic: 'Сигналы' } } },
+    { id: 'b', topicKey: 'signals', topic: 'Other label', versions: [22], content: { es: { topic: 'Señales' } } },
+  ];
+  const result = calculateReadiness(localizedFixture, normalizeState({ progress: { a: { mastery: 20 }, b: { mastery: 80 } } }));
+  assert.deepEqual(result.topics, [{ topicKey: 'signals', score: 50 }]);
+});
+
+test('lookup searches the active locale and stable aliases', () => {
+  assert.ok(filterLookup(lookupEntries, 'entrada de señal', 'es').some(({ id }) => id === 'signal-inputs'));
+  assert.ok(filterLookup(lookupEntries, 'отписка', 'ru').some(({ id }) => id === 'take-until-destroyed'));
+  assert.ok(filterLookup(lookupEntries, 'DestroyRef', 'es').some(({ id }) => id === 'take-until-destroyed'));
+});
+
+test('mock report exposes a locale-neutral risk', () => {
+  const items = [questions[0], questions[5]];
+  const report = buildMockReport(items, { [items[0].id]: 'strong', [items[1].id]: 'pass' }, normalizeState({}));
+  assert.deepEqual(report.risk, { topicKey: items[1].topicKey, itemId: items[1].id });
+});
+
+test('required questions expose valid structured examples', () => {
+  const expected = [
+    'signal-input-contract', 'control-flow-track', 'share-replay-cache', 'effect-derived-state',
+    'linked-signal-selection', 'zoneless-notifications', 'resource-read-boundary',
+    'flattening-operator-decision', 'take-until-context',
+  ].sort();
+  const withExamples = questions.filter(({ example }) => example).map(({ id }) => id).sort();
+  assert.deepEqual(withExamples, expected);
+  for (const question of questions.filter(({ example }) => example)) {
+    assert.ok(SUPPORTED_LOCALES.every((locale) => question.example.context[locale]?.trim()), `${question.id} needs localized context`);
+    const files = Object.entries(question.example.files);
+    assert.ok(files.length > 0);
+    assert.ok(files.every(([type, source]) => ['ts', 'html', 'scss'].includes(type) && source.trim()));
+  }
+  assert.ok(questions.some(({ example }) => ['ts', 'html', 'scss'].every((file) => example?.files[file])));
+  assert.ok(questions.some(({ example }) => Object.keys(example?.files || {}).join(',') === 'ts'));
+  assert.equal(getLocalizedContent(questions[0], 'xx').prompt, questions[0].content.en.prompt);
+});
+
 test('Modern Focus ranks Angular 18–22 content ahead of legacy content', () => {
   const state = normalizeState({});
   const selected = selectWorkout(contentFixture, state, 'modern', { total: 5, now: '2026-10-23T09:00:00.000Z' });
@@ -137,7 +213,7 @@ test('readiness stays between 0 and 100 and reports the weakest topic', () => {
   });
   const result = calculateReadiness(contentFixture, state);
   assert.ok(result.overall >= 0 && result.overall <= 100);
-  assert.equal(result.weakest.topic, 'Zoneless');
+  assert.equal(result.weakest.topicKey, 'Zoneless');
   assert.equal(result.weakest.score, 0);
 });
 
@@ -210,7 +286,7 @@ test('cram session prioritizes recent mistakes while retaining varied interview 
 });
 
 test('workout view exposes progressive reveals, save control, and all confidence ratings', () => {
-  const item = questions.find((question) => question.code);
+  const item = questions.find((question) => question.id === 'signal-input-contract');
   const html = renderWorkoutView({
     items: [item],
     index: 0,
@@ -261,7 +337,7 @@ test('mock report groups strong and weak answers and names the clearest intervie
   const report = buildMockReport(items, { [items[0].id]: 'strong', [items[1].id]: 'partial', [items[2].id]: 'pass' }, normalizeState({}));
   assert.deepEqual(report.strong.map((entry) => entry.id), [items[0].id]);
   assert.deepEqual(report.needsWork.map((entry) => entry.id), [items[1].id, items[2].id]);
-  assert.match(report.risk, new RegExp(items[2].topic, 'i'));
+  assert.deepEqual(report.risk, { topicKey: items[2].topicKey, itemId: items[2].id });
   assert.ok(report.score >= 0 && report.score <= 100);
 });
 

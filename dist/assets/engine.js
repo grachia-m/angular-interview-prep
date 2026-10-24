@@ -1,4 +1,4 @@
-import { normalizeLocale } from './i18n.js';
+import { getLocalizedContent, normalizeLocale } from './i18n.js';
 
 const DAY = 86_400_000;
 const VALID_MODES = new Set(['mixed', 'modern', '16', '17', '18', '19', '20', '21', '22']);
@@ -110,34 +110,46 @@ export function applyRating(rawState, item, rating, now = new Date()) {
 export function calculateReadiness(content, rawState) {
   const state = normalizeState(rawState);
   const topicScores = new Map();
+  const topicLabels = new Map();
 
   for (const item of content) {
-    const values = topicScores.get(item.topic) || [];
+    const topicKey = item.topicKey || item.topic || 'no-data';
+    const values = topicScores.get(topicKey) || [];
     values.push(masteryFor(item, state));
-    topicScores.set(item.topic, values);
+    topicScores.set(topicKey, values);
+    if (!topicLabels.has(topicKey)) topicLabels.set(topicKey, item.topic || topicKey);
   }
 
   const topics = [...topicScores.entries()]
-    .map(([topic, values]) => ({
-      topic,
-      score: Math.round(values.reduce((sum, value) => sum + clamp(value), 0) / values.length),
-    }))
-    .sort((a, b) => a.score - b.score || a.topic.localeCompare(b.topic));
+    .map(([topicKey, values]) => {
+      const summary = {
+        topicKey,
+        score: Math.round(values.reduce((sum, value) => sum + clamp(value), 0) / values.length),
+      };
+      Object.defineProperty(summary, 'topic', { value: topicLabels.get(topicKey) || topicKey, enumerable: false });
+      return summary;
+    })
+    .sort((a, b) => a.score - b.score || a.topicKey.localeCompare(b.topicKey));
 
   const overall = topics.length
     ? Math.round(topics.reduce((sum, topic) => sum + topic.score, 0) / topics.length)
     : 0;
-  return { overall: clamp(overall), weakest: topics[0] || { topic: 'No data yet', score: 0 }, topics };
+  const empty = { topicKey: 'no-data', score: 0 };
+  Object.defineProperty(empty, 'topic', { value: 'No data yet', enumerable: false });
+  return { overall: clamp(overall), weakest: topics[0] || empty, topics };
 }
 
-export function filterLookup(entries, query) {
+export function filterLookup(entries, query, locale = 'en') {
   const needle = String(query || '').trim().toLowerCase();
   if (!needle) return entries;
-  return entries.filter((entry) => [entry.title, entry.useWhen, entry.trap, ...(entry.aliases || [])]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-    .includes(needle));
+  return entries.filter((entry) => {
+    const localized = getLocalizedContent(entry, locale);
+    return [localized.title, localized.useWhen, localized.trap, ...(entry.aliases || [])]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(needle);
+  });
 }
 
 export function toggleBookmark(rawState, itemId) {
@@ -235,8 +247,6 @@ export function buildMockReport(items, assessments = {}, rawState = {}) {
   const needsWork = entries.filter((entry) => entry.assessment !== 'strong');
   const weakest = [...entries].sort((a, b) => a.score - b.score || b.difficulty - a.difficulty)[0];
   const score = entries.length ? Math.round(entries.reduce((sum, entry) => sum + entry.score, 0) / entries.length) : 0;
-  const risk = weakest
-    ? `${weakest.topic} is the clearest interview risk: the answer needs a more explicit decision boundary and tradeoff.`
-    : 'Complete a mock interview to identify a specific risk.';
+  const risk = weakest ? { topicKey: weakest.topicKey || weakest.topic, itemId: weakest.id } : null;
   return { score: clamp(score), strong, needsWork, risk, entries };
 }
