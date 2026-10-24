@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f1eadf" />
-    <meta name="description" content="Adaptive interview training for Angular 16–22." />
-    <title>Angular Interview Prep</title>
+    <meta name="description" content="Adaptive middle and senior interview training for Angular, JavaScript, HTML, and CSS." />
+    <title>Frontend Interview Prep</title>
     <link rel="stylesheet" href="./assets/styles.css" />
   </head>
   <body>
@@ -35,7 +35,7 @@
       <div class="workspace">
         <header class="topbar">
           <div class="topbar-copy">
-            <p class="eyebrow" data-i18n="shell.daily">Daily Angular practice</p>
+            <p class="eyebrow" data-i18n="shell.daily">Daily frontend practice</p>
             <h1 id="page-title">Today</h1>
           </div>
 
@@ -43,6 +43,17 @@
             <button class="lookup-trigger" type="button" data-action="open-lookup">
               <span aria-hidden="true">⌕</span> <span data-i18n="nav.lookup">Quick lookup</span> <kbd>⌘ K</kbd>
             </button>
+
+            <label class="track-picker">
+              <span class="visually-hidden" data-i18n="controls.track">Interview track</span>
+              <select id="track-mode" aria-label="Interview track" data-i18n-aria="controls.track">
+                <option value="angular" data-i18n="track.angular">Angular</option>
+                <option value="javascript" data-i18n="track.javascript">JavaScript</option>
+                <option value="html" data-i18n="track.html">HTML</option>
+                <option value="css" data-i18n="track.css">CSS</option>
+                <option value="mixed" data-i18n="track.mixed">Interview Mix</option>
+              </select>
+            </label>
 
             <label class="version-picker">
               <span>Angular</span>

@@ -103,8 +103,8 @@ test('translator interpolates variables and falls back to English', () => {
   assert.equal(t('fr', 'nav.today'), 'Today');
   assert.equal(t('ru', 'test.englishFallback'), 'English fallback');
   assert.deepEqual(getDocumentMetadata('es'), {
-    title: 'Preparación para entrevistas de Angular',
-    description: 'Entrenamiento adaptativo para entrevistas de Angular 16–22.',
+    title: 'Preparación para entrevistas frontend',
+    description: 'Preparación adaptativa middle/senior de Angular, JavaScript, HTML y CSS.',
   });
 });
 
@@ -328,6 +328,56 @@ test('index exposes localization hooks for every static visible control', () => 
   assert.match(markup, /data-i18n="controls\.modernFocus"/);
   assert.match(markup, /data-i18n-aria="controls\.locale"/);
   assert.match(markup, /data-i18n-placeholder="lookup\.placeholder"/);
+});
+
+test('index exposes the localized track selector', () => {
+  const markup = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
+  assert.match(markup, /id="track-mode"/);
+  assert.match(markup, /data-i18n-aria="controls\.track"/);
+  for (const track of ['angular', 'javascript', 'html', 'css', 'mixed']) {
+    assert.match(markup, new RegExp(`value="${track}"[^>]*data-i18n="track\\.${track}"`));
+  }
+});
+
+test('Today and progress name the active track in every locale', () => {
+  const cases = [
+    ['en', 'javascript', 'JavaScript'],
+    ['ru', 'html', 'HTML'],
+    ['es', 'css', 'CSS'],
+    ['es', 'mixed', 'Mix de entrevista'],
+  ];
+  for (const [locale, trackMode, label] of cases) {
+    const state = normalizeState({ locale, trackMode });
+    assert.match(renderTodayView({ state, questions, locale }), new RegExp(label));
+    assert.match(renderProgressView({ state, questions, locale }), new RegExp(label));
+  }
+});
+
+test('workout renders JavaScript and mixed blueprints', () => {
+  const jsSession = selectTrackWorkout(questions, normalizeState({ trackMode: 'javascript' }), { trackMode: 'javascript' });
+  const jsHtml = renderWorkoutView({ ...jsSession, index: 0, state: normalizeState({ trackMode: 'javascript' }), locale: 'en' });
+  assert.match(jsHtml, /Runtime &amp; language/);
+  assert.match(jsHtml, /Async JavaScript/);
+  const mixedSession = selectTrackWorkout(questions, normalizeState({ trackMode: 'mixed' }), { trackMode: 'mixed' });
+  const mixedHtml = renderWorkoutView({ ...mixedSession, index: 4, state: normalizeState({ trackMode: 'mixed' }), locale: 'ru' });
+  assert.match(mixedHtml, /Асинхронный JavaScript/);
+  assert.match(mixedHtml, /HTML и CSS/);
+});
+
+test('track control state is independent from active session state', () => {
+  const session = selectTrackWorkout(questions, normalizeState({ trackMode: 'javascript' }), { trackMode: 'javascript' });
+  const html = renderWorkoutView({ ...session, index: 0, state: normalizeState({ trackMode: 'css' }), locale: 'en' });
+  assert.match(html, /Runtime &amp; language/);
+  assert.match(html, /Objects &amp; functions/);
+  assert.doesNotMatch(html, />Cascade</);
+});
+
+test('JavaScript example tabs use accessible JS labels', () => {
+  const item = frontendQuestions.find(({ id }) => id === 'js-event-delegation');
+  const html = appViews.renderCodeExample({ item, locale: 'es' });
+  assert.match(html, /role="tablist"/);
+  assert.match(html, /data-file="js"[^>]*aria-selected="true"[^>]*>JavaScript</);
+  assert.match(html, /role="tabpanel"[^>]*aria-labelledby="example-js-event-delegation-tab-js"/);
 });
 
 test('code example defaults to TypeScript and shows only supplied files', () => {

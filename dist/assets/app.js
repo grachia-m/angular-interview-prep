@@ -4,6 +4,7 @@ import { resolveInitialLocale, t } from './i18n.js';
 import {
   applyLocaleToDocument as viewApplyLocaleToDocument,
   modeLabel as viewModeLabel,
+  trackLabel as viewTrackLabel,
   renderDeckView as viewRenderDeckView,
   renderLookupResults as viewRenderLookupResults,
   renderMockQuestion as viewRenderMockQuestion,
@@ -20,11 +21,14 @@ import {
   applyRating,
   buildMockReport,
   calculateReadiness,
+  filterByTrack,
   filterLookup,
   getDeck,
+  getWorkoutBlueprint,
   normalizeState,
   selectCramSession,
   selectMockQuestions,
+  selectTrackWorkout,
   selectWorkout,
   toggleBookmark,
 } from './engine.js';
@@ -399,6 +403,7 @@ function boot() {
   const pageTitle = document.querySelector('#page-title');
   const versionSelect = document.querySelector('#version-mode');
   const focusInput = document.querySelector('#modern-focus');
+  const trackSelect = document.querySelector('#track-mode');
   const localeSelect = document.querySelector('#locale-select');
   const sidebarMode = document.querySelector('#sidebar-mode');
   const lookupDialog = document.querySelector('#lookup-dialog');
@@ -406,10 +411,18 @@ function boot() {
   const lookupResults = document.querySelector('#lookup-results');
 
   function syncControls() {
+    trackSelect.value = state.trackMode;
     versionSelect.value = state.versionMode;
     focusInput.checked = state.modernFocus;
+    const angularControlsRelevant = ['angular', 'mixed'].includes(state.trackMode);
+    versionSelect.disabled = !angularControlsRelevant;
+    focusInput.disabled = !angularControlsRelevant;
+    document.querySelector('.topbar-actions')?.classList.toggle('is-non-angular', !angularControlsRelevant);
+    document.body.dataset.track = state.trackMode;
     if (localeSelect) localeSelect.value = state.locale;
-    sidebarMode.textContent = viewModeLabel(state, state.locale);
+    sidebarMode.textContent = state.trackMode === 'angular'
+      ? `${viewTrackLabel(state.trackMode, state.locale)} · ${viewModeLabel(state, state.locale)}`
+      : viewTrackLabel(state.trackMode, state.locale);
     viewApplyLocaleToDocument(state.locale);
   }
 
@@ -425,9 +438,9 @@ function boot() {
     else if (view === 'practice') viewNode.innerHTML = viewRenderPracticeHub(state, state.locale);
     else if (view === 'workout' && session) viewNode.innerHTML = viewRenderWorkoutView({ ...session, state, locale: state.locale });
     else if (view === 'review' && session) viewNode.innerHTML = viewRenderReviewView({ items: session.items, state, locale: state.locale });
-    else if (view === 'saved') viewNode.innerHTML = viewRenderDeckView({ deck: currentDeck, items: getDeck(questions, state, currentDeck), state, locale: state.locale });
+    else if (view === 'saved') viewNode.innerHTML = viewRenderDeckView({ deck: currentDeck, items: getDeck(questions, state, currentDeck, new Date(), state.trackMode), state, locale: state.locale });
     else if (view === 'mock') {
-      if (!mock) viewNode.innerHTML = viewRenderMockSetup({ locale: state.locale });
+      if (!mock) viewNode.innerHTML = viewRenderMockSetup({ locale: state.locale, trackMode: state.trackMode });
       else if (mock.complete) viewNode.innerHTML = viewRenderMockReport(buildMockReport(mock.items, mock.assessments, state), state.locale);
       else viewNode.innerHTML = viewRenderMockQuestion({ ...mock, locale: state.locale });
     }
@@ -437,10 +450,11 @@ function boot() {
     syncControls();
   }
 
-  function startSession(items, kind = 'daily') {
-    const fallbackMode = state.modernFocus ? 'modern' : state.versionMode;
-    const selected = items?.length ? items : selectWorkout(questions, state, fallbackMode);
-    session = { items: selected, index: 0, reveal: {}, exampleFiles: {}, sessionKind: kind };
+  function startSession(items, kind = 'daily', blueprint) {
+    const selectedSession = items?.length
+      ? { items, blueprint: blueprint || getWorkoutBlueprint(state.trackMode) }
+      : selectTrackWorkout(questions, state, { trackMode: state.trackMode });
+    session = { ...selectedSession, index: 0, reveal: {}, exampleFiles: {}, sessionKind: kind, trackMode: state.trackMode };
     location.hash = 'workout';
     render('workout');
     document.querySelector('#main-view')?.focus();
@@ -464,7 +478,7 @@ function boot() {
   }
 
   function openLookup() {
-    lookupResults.innerHTML = viewRenderLookupResults('', state.locale);
+    lookupResults.innerHTML = viewRenderLookupResults('', state.locale, state.trackMode);
     lookupDialog.showModal();
     requestAnimationFrame(() => lookupInput.focus());
   }
@@ -485,7 +499,7 @@ function boot() {
     if (action === 'close-lookup') lookupDialog.close();
     if (action === 'open-progress') { location.hash = 'progress'; render('progress'); }
     if (action === 'start-workout') startSession();
-    if (action === 'start-cram') startSession(selectCramSession(questions, state, { total: 10 }), 'cram');
+    if (action === 'start-cram') startSession(selectCramSession(filterByTrack(questions, state.trackMode), state, { total: 10 }), 'cram');
     if (action === 'exit-workout' || action === 'back-today') { location.hash = 'today'; render('today'); }
     if (action === 'reveal-hint' || action === 'reveal-points' || action === 'reveal-answer' || action === 'reveal-example') {
       session.reveal[action.replace('reveal-', '')] = true;
@@ -522,7 +536,7 @@ function boot() {
     }
     if (action === 'practice-deck') {
       const deck = actionNode.dataset.deck || currentDeck;
-      startSession(getDeck(questions, state, deck).slice(0, 10), deck);
+      startSession(getDeck(questions, state, deck, new Date(), state.trackMode).slice(0, 10), deck);
     }
     if (action === 'review-due') {
       currentDeck = 'due';
@@ -531,16 +545,17 @@ function boot() {
     }
     if (action === 'practice-topic') {
       const topicKey = actionNode.dataset.topicKey || '';
-      const filtered = questions.filter((item) => item.topicKey === topicKey);
+      const filtered = filterByTrack(questions, state.trackMode).filter((item) => item.topicKey === topicKey);
       startSession(filtered.slice(0, 6), 'focused');
     }
     if (action === 'practice-weak') {
-      const weak = getDeck(questions, state, 'mistakes');
-      startSession((weak.length ? weak : selectCramSession(questions, state, { total: 6 })).slice(0, 6), 'weak areas');
+      const scoped = filterByTrack(questions, state.trackMode);
+      const weak = getDeck(questions, state, 'mistakes', new Date(), state.trackMode);
+      startSession((weak.length ? weak : selectCramSession(scoped, state, { total: 6 })).slice(0, 6), 'weak areas');
     }
     if (action === 'start-mock') {
       const level = actionNode.dataset.level || 'middle';
-      mock = { items: selectMockQuestions(questions, level, 6), index: 0, level, answers: {}, assessments: {}, complete: false };
+      mock = { items: selectMockQuestions(questions, level, 6, state.trackMode), index: 0, level, answers: {}, assessments: {}, complete: false, trackMode: state.trackMode };
       render('mock');
       document.querySelector('#main-view')?.focus();
     }
@@ -560,7 +575,7 @@ function boot() {
     }
     if (action === 'practice-mock-gaps' && mock) {
       const report = buildMockReport(mock.items, mock.assessments, state);
-      startSession(report.needsWork.map((entry) => questions.find((item) => item.id === entry.id)).filter(Boolean), 'mock gaps');
+      startSession(report.needsWork.map((entry) => questions.find((item) => item.id === entry.id)).filter(Boolean), 'mock gaps', getWorkoutBlueprint(mock.trackMode));
     }
   });
 
@@ -574,6 +589,11 @@ function boot() {
     saveState(state);
     render();
   });
+  trackSelect.addEventListener('change', () => {
+    state = normalizeState({ ...state, trackMode: trackSelect.value });
+    saveState(state);
+    render();
+  });
   localeSelect?.addEventListener('change', () => {
     if (mock && !mock.complete) {
       const item = mock.items[mock.index];
@@ -583,7 +603,7 @@ function boot() {
     saveState(state);
     render();
   });
-  lookupInput.addEventListener('input', () => { lookupResults.innerHTML = viewRenderLookupResults(lookupInput.value, state.locale); });
+  lookupInput.addEventListener('input', () => { lookupResults.innerHTML = viewRenderLookupResults(lookupInput.value, state.locale, state.trackMode); });
   window.addEventListener('hashchange', () => render(location.hash.replace('#', '') || 'today'));
   window.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openLookup(); }
