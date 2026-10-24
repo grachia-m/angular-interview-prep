@@ -19,12 +19,12 @@ import {
 } from './views.js';
 import {
   applyRating,
+  buildSessionBlueprint,
   buildMockReport,
   calculateReadiness,
   filterByTrack,
   filterLookup,
   getDeck,
-  getWorkoutBlueprint,
   normalizeState,
   selectCramSession,
   selectMockQuestions,
@@ -37,6 +37,37 @@ const STORAGE_KEY = 'angle-interview-state-v1';
 
 export function resolveNavigationDeck(nav, currentDeck) {
   return nav === 'saved' ? 'saved' : currentDeck;
+}
+
+export function captureMockAnswer(mock, answer) {
+  if (!mock?.items?.[mock.index]) return mock;
+  const itemId = mock.items[mock.index].id;
+  return { ...mock, answers: { ...mock.answers, [itemId]: answer } };
+}
+
+export function sessionScopedState(state, session) {
+  return normalizeState({ ...state, trackMode: session?.trackMode ?? state?.trackMode });
+}
+
+export function nextExampleFile(files, currentFile, key) {
+  if (!files.length || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return null;
+  if (key === 'Home') return files[0];
+  if (key === 'End') return files.at(-1);
+  const index = Math.max(0, files.indexOf(currentFile));
+  const delta = key === 'ArrowRight' ? 1 : -1;
+  return files[(index + delta + files.length) % files.length];
+}
+
+export function createSession({ items = [], blueprint, kind = 'daily', trackMode = 'angular' } = {}) {
+  return {
+    items,
+    blueprint: blueprint || buildSessionBlueprint(items),
+    index: 0,
+    reveal: {},
+    exampleFiles: {},
+    sessionKind: kind,
+    trackMode,
+  };
 }
 
 export {
@@ -437,7 +468,7 @@ function boot() {
     if (view === 'today') viewNode.innerHTML = viewRenderTodayView({ state, questions, locale: state.locale });
     else if (view === 'practice') viewNode.innerHTML = viewRenderPracticeHub(state, state.locale);
     else if (view === 'workout' && session) viewNode.innerHTML = viewRenderWorkoutView({ ...session, state, locale: state.locale });
-    else if (view === 'review' && session) viewNode.innerHTML = viewRenderReviewView({ items: session.items, state, locale: state.locale });
+    else if (view === 'review' && session) viewNode.innerHTML = viewRenderReviewView({ items: session.items, state: sessionScopedState(state, session), locale: state.locale });
     else if (view === 'saved') viewNode.innerHTML = viewRenderDeckView({ deck: currentDeck, items: getDeck(questions, state, currentDeck, new Date(), state.trackMode), state, locale: state.locale });
     else if (view === 'mock') {
       if (!mock) viewNode.innerHTML = viewRenderMockSetup({ locale: state.locale, trackMode: state.trackMode });
@@ -450,11 +481,11 @@ function boot() {
     syncControls();
   }
 
-  function startSession(items, kind = 'daily', blueprint) {
+  function startSession(items, kind = 'daily', blueprint, trackMode = state.trackMode) {
     const selectedSession = items?.length
-      ? { items, blueprint: blueprint || getWorkoutBlueprint(state.trackMode) }
-      : selectTrackWorkout(questions, state, { trackMode: state.trackMode });
-    session = { ...selectedSession, index: 0, reveal: {}, exampleFiles: {}, sessionKind: kind, trackMode: state.trackMode };
+      ? { items, blueprint }
+      : selectTrackWorkout(questions, state, { trackMode });
+    session = createSession({ ...selectedSession, kind, trackMode });
     location.hash = 'workout';
     render('workout');
     document.querySelector('#main-view')?.focus();
@@ -499,7 +530,7 @@ function boot() {
     if (action === 'close-lookup') lookupDialog.close();
     if (action === 'open-progress') { location.hash = 'progress'; render('progress'); }
     if (action === 'start-workout') startSession();
-    if (action === 'start-cram') startSession(selectCramSession(filterByTrack(questions, state.trackMode), state, { total: 10 }), 'cram');
+    if (action === 'start-cram') startSession(selectCramSession(filterByTrack(questions, state.trackMode), state, { total: 10, trackMode: state.trackMode }), 'cram');
     if (action === 'exit-workout' || action === 'back-today') { location.hash = 'today'; render('today'); }
     if (action === 'reveal-hint' || action === 'reveal-points' || action === 'reveal-answer' || action === 'reveal-example') {
       session.reveal[action.replace('reveal-', '')] = true;
@@ -549,9 +580,10 @@ function boot() {
       startSession(filtered.slice(0, 6), 'focused');
     }
     if (action === 'practice-weak') {
-      const scoped = filterByTrack(questions, state.trackMode);
-      const weak = getDeck(questions, state, 'mistakes', new Date(), state.trackMode);
-      startSession((weak.length ? weak : selectCramSession(scoped, state, { total: 6 })).slice(0, 6), 'weak areas');
+      const followupTrack = session?.trackMode ?? state.trackMode;
+      const scoped = filterByTrack(questions, followupTrack);
+      const weak = getDeck(questions, state, 'mistakes', new Date(), followupTrack);
+      startSession((weak.length ? weak : selectCramSession(scoped, state, { total: 6, trackMode: followupTrack })).slice(0, 6), 'weak areas', undefined, followupTrack);
     }
     if (action === 'start-mock') {
       const level = actionNode.dataset.level || 'middle';
@@ -575,7 +607,7 @@ function boot() {
     }
     if (action === 'practice-mock-gaps' && mock) {
       const report = buildMockReport(mock.items, mock.assessments, state);
-      startSession(report.needsWork.map((entry) => questions.find((item) => item.id === entry.id)).filter(Boolean), 'mock gaps', getWorkoutBlueprint(mock.trackMode));
+      startSession(report.needsWork.map((entry) => questions.find((item) => item.id === entry.id)).filter(Boolean), 'mock gaps', undefined, mock.trackMode);
     }
   });
 
@@ -590,14 +622,14 @@ function boot() {
     render();
   });
   trackSelect.addEventListener('change', () => {
+    if (mock && !mock.complete) mock = captureMockAnswer(mock, document.querySelector('#mock-answer')?.value || mock.answers[mock.items[mock.index].id] || '');
     state = normalizeState({ ...state, trackMode: trackSelect.value });
     saveState(state);
     render();
   });
   localeSelect?.addEventListener('change', () => {
     if (mock && !mock.complete) {
-      const item = mock.items[mock.index];
-      mock.answers[item.id] = document.querySelector('#mock-answer')?.value || mock.answers[item.id] || '';
+      mock = captureMockAnswer(mock, document.querySelector('#mock-answer')?.value || mock.answers[mock.items[mock.index].id] || '');
     }
     state = { ...state, locale: localeSelect.value };
     saveState(state);
@@ -608,6 +640,18 @@ function boot() {
   window.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openLookup(); }
     if (event.key === 'Escape' && lookupDialog.open) lookupDialog.close();
+    const tab = event.target.closest?.('[role="tab"][data-action="select-example-file"]');
+    if (tab && session) {
+      const tabs = [...tab.closest('[role="tablist"]').querySelectorAll('[role="tab"]')];
+      const requested = nextExampleFile(tabs.map((node) => node.dataset.file), tab.dataset.file, event.key);
+      if (requested) {
+        event.preventDefault();
+        const item = session.items[session.index];
+        session.exampleFiles[item.id] = requested;
+        render('workout');
+        requestAnimationFrame(() => document.querySelector(`[role="tab"][data-file="${requested}"]`)?.focus());
+      }
+    }
   });
 
   syncControls();

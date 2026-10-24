@@ -121,4 +121,3 @@
 - [ ] Perform one fresh whole-branch review against the spec and Review Focus. Fix Critical/Important findings with RED→GREEN tests; ledger Minor findings.
 - [ ] Commit final QA corrections and documentation, rerun the full suite, and push reviewed `main` to `origin/main` as already authorized by the publication request.
 - [ ] Watch GitHub Pages to success, verify `origin/main` equals the deployed commit, and confirm the production selector, Russian/Spanish copy, async question, and code tabs without console errors.
-

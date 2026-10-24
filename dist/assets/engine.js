@@ -45,6 +45,17 @@ export function getWorkoutBlueprint(trackMode = 'angular') {
   return WORKOUT_BLUEPRINTS[normalizeTrack(trackMode)];
 }
 
+export function buildSessionBlueprint(items = []) {
+  const stages = [];
+  for (const item of items) {
+    const key = item.section;
+    const previous = stages.at(-1);
+    if (previous?.key === key) previous.count += 1;
+    else stages.push({ key, sections: [key], count: 1 });
+  }
+  return { id: 'adhoc', total: items.length, stages };
+}
+
 const clamp = (value, min = 0, max = 100) => Math.min(max, Math.max(min, Number(value) || 0));
 
 export function normalizeState(input = {}) {
@@ -267,6 +278,10 @@ export function selectCramSession(content, rawState, options = {}) {
   const state = normalizeState(rawState);
   const total = Math.max(1, Number(options.total) || 10);
   const now = options.now ? new Date(options.now) : new Date();
+  const trackMode = normalizeTrack(options.trackMode ?? state.trackMode);
+  if (trackMode === 'mixed') {
+    return selectTrackWorkout(content, state, { trackMode, now }).items.slice(0, total);
+  }
   const result = [];
   const seen = new Set();
   const add = (item) => {

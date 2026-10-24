@@ -217,8 +217,12 @@ export function renderDeckView({ deck = 'saved', items = [], state: rawState, lo
   const state = normalizeState(rawState);
   const lang = activeLocale(locale, state);
   const name = t(lang, deckKey(deck));
+  const decks = ['saved', 'mistakes', 'modern', 'hard', 'due'];
   return `<section class="deck-view">
     <header class="view-intro"><p class="eyebrow">${escapeHtml(t(lang, 'deck.eyebrow'))}</p><h2>${escapeHtml(name)}</h2><p>${escapeHtml(countLabel(lang, items.length))}</p></header>
+    <div class="deck-tabs" role="tablist" aria-label="${escapeHtml(t(lang, 'deck.eyebrow'))}">
+      ${decks.map((key) => `<button type="button" data-action="open-deck" data-deck="${key}" role="tab" aria-selected="${key === deck}" class="${key === deck ? 'is-active' : ''}">${escapeHtml(t(lang, deckKey(key)))}</button>`).join('')}
+    </div>
     ${items.length ? `<div class="deck-grid">${items.map((item) => {
       const copy = localize(item, lang);
       const saved = state.bookmarks.includes(item.id);

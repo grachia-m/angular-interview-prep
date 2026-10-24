@@ -18,6 +18,7 @@ import {
   selectWorkout,
   toggleBookmark,
 } from '../dist/assets/engine.js';
+import * as engineApi from '../dist/assets/engine.js';
 import { questions, lookupEntries, sectionMeta } from '../dist/assets/data.js';
 import { frontendLookupEntries, frontendQuestions, frontendSectionMeta } from '../dist/assets/frontend-data.js';
 import {
@@ -261,6 +262,28 @@ test('Interview Mix is JavaScript heavy and includes two async questions', () =>
   assert.ok(items.some(({ track }) => track === 'css'));
 });
 
+test('Interview Mix cram keeps its JavaScript and async emphasis', () => {
+  const state = normalizeState({ trackMode: 'mixed' });
+  const items = selectCramSession(questions, state, { total: 10, trackMode: 'mixed', now: '2026-10-24T09:00:00.000Z' });
+  assert.equal(items.length, 10);
+  assert.ok(items.filter(({ track }) => track === 'javascript').length >= 6);
+  assert.ok(items.filter(({ tags }) => tags?.includes('async')).length >= 2);
+  assert.ok(items.some(({ track }) => track === 'html'));
+  assert.ok(items.some(({ track }) => track === 'css'));
+});
+
+test('ad hoc session blueprint follows the actual question sections', () => {
+  assert.equal(typeof engineApi.buildSessionBlueprint, 'function');
+  const promise = questions.find(({ id }) => id === 'js-promise-chain-errors');
+  const scenario = questions.find(({ id }) => id === 'signals-migration-150-screens');
+  assert.deepEqual(engineApi.buildSessionBlueprint([promise]), {
+    id: 'adhoc', total: 1, stages: [{ key: 'js-async', sections: ['js-async'], count: 1 }],
+  });
+  assert.deepEqual(engineApi.buildSessionBlueprint([scenario]), {
+    id: 'adhoc', total: 1, stages: [{ key: 'scenario', sections: ['scenario'], count: 1 }],
+  });
+});
+
 test('non Angular ranking ignores Angular version controls', () => {
   const oldAngular = selectTrackWorkout(questions, normalizeState({ trackMode: 'javascript', versionMode: '16', modernFocus: true }), { trackMode: 'javascript' });
   const newAngular = selectTrackWorkout(questions, normalizeState({ trackMode: 'javascript', versionMode: '22' }), { trackMode: 'javascript' });
@@ -372,12 +395,44 @@ test('track control state is independent from active session state', () => {
   assert.doesNotMatch(html, />Cascade</);
 });
 
+test('mock notes and completed workout state stay scoped to the active session', () => {
+  assert.equal(typeof appViews.captureMockAnswer, 'function');
+  assert.equal(typeof appViews.sessionScopedState, 'function');
+  const item = questions.find(({ track }) => track === 'javascript');
+  const mock = appViews.captureMockAnswer({ items: [item], index: 0, answers: {} }, 'draft answer');
+  assert.deepEqual(mock.answers, { [item.id]: 'draft answer' });
+  const state = normalizeState({ trackMode: 'css', bookmarks: [item.id], progress: { [item.id]: { mastery: 72 } } });
+  const scoped = appViews.sessionScopedState(state, { trackMode: 'javascript' });
+  assert.equal(scoped.trackMode, 'javascript');
+  assert.deepEqual(scoped.bookmarks, state.bookmarks);
+  assert.deepEqual(scoped.progress, state.progress);
+});
+
+test('follow-up session keeps the source track and derives its own stages', () => {
+  assert.equal(typeof appViews.createSession, 'function');
+  const item = questions.find(({ id }) => id === 'js-promise-chain-errors');
+  const session = appViews.createSession({ items: [item], kind: 'weak areas', trackMode: 'javascript' });
+  assert.equal(session.trackMode, 'javascript');
+  assert.equal(session.sessionKind, 'weak areas');
+  assert.deepEqual(session.blueprint.stages, [{ key: 'js-async', sections: ['js-async'], count: 1 }]);
+});
+
 test('JavaScript example tabs use accessible JS labels', () => {
   const item = frontendQuestions.find(({ id }) => id === 'js-event-delegation');
   const html = appViews.renderCodeExample({ item, locale: 'es' });
   assert.match(html, /role="tablist"/);
   assert.match(html, /data-file="js"[^>]*aria-selected="true"[^>]*>JavaScript</);
   assert.match(html, /role="tabpanel"[^>]*aria-labelledby="example-js-event-delegation-tab-js"/);
+});
+
+test('code tab navigation supports arrow and boundary keys', () => {
+  assert.equal(typeof appViews.nextExampleFile, 'function');
+  const files = ['js', 'html', 'scss'];
+  assert.equal(appViews.nextExampleFile(files, 'js', 'ArrowRight'), 'html');
+  assert.equal(appViews.nextExampleFile(files, 'js', 'ArrowLeft'), 'scss');
+  assert.equal(appViews.nextExampleFile(files, 'html', 'Home'), 'js');
+  assert.equal(appViews.nextExampleFile(files, 'html', 'End'), 'scss');
+  assert.equal(appViews.nextExampleFile(files, 'html', 'Enter'), null);
 });
 
 test('code example defaults to TypeScript and shows only supplied files', () => {
@@ -599,6 +654,15 @@ test('deck view renders empty guidance and saved question cards', () => {
   const html = renderDeckView({ deck: 'saved', items: [questions[0]], state: normalizeState({ bookmarks: [questions[0].id] }) });
   assert.match(html, new RegExp(questions[0].prompt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.match(html, /Remove/);
+});
+
+test('deck view exposes every focused deck as an accessible tab', () => {
+  const html = renderDeckView({ deck: 'mistakes', items: [], state: normalizeState({}) });
+  assert.match(html, /role="tablist"/);
+  for (const deck of ['saved', 'mistakes', 'modern', 'hard', 'due']) {
+    assert.match(html, new RegExp(`data-deck="${deck}"`));
+  }
+  assert.match(html, /data-deck="mistakes"[^>]*aria-selected="true"/);
 });
 
 test('mock question selection is varied and senior mode is not easier than middle mode', () => {

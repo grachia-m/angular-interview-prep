@@ -125,4 +125,3 @@ Preserve the warm notebook visual system. Place the track selector beside the An
 - Automated tests cover state migration, exact question counts, content completeness, async coverage, mixed weighting, track-specific workout structure, mock/deck/readiness filtering, generalized example tabs, locale continuity, and existing Angular regressions.
 - Browser QA covers every track, all three locales, one mixed workout, an async code example, HTML/SCSS examples, mock mode, saved/mistake decks, progress, and 390 px responsive behavior.
 - Publish focused commits to `grachia-m/angular-interview-prep` and verify the matching GitHub Pages deployment and live production behavior.
-
