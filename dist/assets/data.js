@@ -1,3 +1,5 @@
+import { frontendLookupEntries, frontendQuestions, frontendSectionMeta } from './frontend-data.js';
+
 const legacyQuestions = [
   {
     id: 'provider-scope-route-tree', section: 'warmup', type: 'Quick recall', topic: 'Dependency injection', versions: [16, 17, 18, 19, 20, 21, 22], difficulty: 3,
@@ -581,7 +583,7 @@ const exampleCatalog = {
   },
 };
 
-export const questions = legacyQuestions.map((question) => {
+const angularQuestions = legacyQuestions.map((question) => {
   const { type, topic, prompt, hint, keyPoints, answer, code: legacyCode, ...metadata } = question;
   const topicKey = topicKeys[question.id];
   const en = { type, topic, prompt, hint, keyPoints, answer };
@@ -590,12 +592,15 @@ export const questions = legacyQuestions.map((question) => {
   const es = { type: typeTranslations[type].es, topic: topicTranslations[topicKey].es, ...translations.es };
   return {
     ...metadata,
+    track: 'angular',
     topicKey,
     ...en,
     content: { en, ru, es },
     ...(exampleCatalog[question.id] ? { example: exampleCatalog[question.id] } : {}),
   };
 });
+
+export const questions = [...angularQuestions, ...frontendQuestions];
 
 const lookupTranslations = {
   'signal-inputs': {
@@ -632,14 +637,16 @@ const lookupTranslations = {
   },
 };
 
-export const lookupEntries = legacyLookupEntries.map((entry) => {
+const angularLookupEntries = legacyLookupEntries.map((entry) => {
   const { title, useWhen, typical, trap, ...metadata } = entry;
   const en = { title, useWhen, typical, trap };
   const translated = lookupTranslations[entry.id];
   const ru = { title: translated.ru[0], useWhen: translated.ru[1], typical, trap: translated.ru[2] };
   const es = { title: translated.es[0], useWhen: translated.es[1], typical, trap: translated.es[2] };
-  return { ...metadata, ...en, content: { en, ru, es } };
+  return { ...metadata, track: 'angular', ...en, content: { en, ru, es } };
 });
+
+export const lookupEntries = [...angularLookupEntries, ...frontendLookupEntries];
 
 const sectionTranslations = {
   warmup: {
@@ -664,9 +671,11 @@ const sectionTranslations = {
   },
 };
 
-export const sectionMeta = Object.fromEntries(Object.entries(legacySectionMeta).map(([key, meta]) => {
+const angularSectionMeta = Object.fromEntries(Object.entries(legacySectionMeta).map(([key, meta]) => {
   const en = { label: meta.label, description: meta.description };
   const ru = { label: sectionTranslations[key].ru[0], description: sectionTranslations[key].ru[1] };
   const es = { label: sectionTranslations[key].es[0], description: sectionTranslations[key].es[1] };
   return [key, { eyebrow: meta.eyebrow, ...en, content: { en, ru, es } }];
 }));
+
+export const sectionMeta = { ...angularSectionMeta, ...frontendSectionMeta };

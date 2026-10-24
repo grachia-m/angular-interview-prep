@@ -2,6 +2,17 @@ import { getLocalizedContent, normalizeLocale } from './i18n.js';
 
 const DAY = 86_400_000;
 const VALID_MODES = new Set(['mixed', 'modern', '16', '17', '18', '19', '20', '21', '22']);
+export const SUPPORTED_TRACKS = ['angular', 'javascript', 'html', 'css', 'mixed'];
+
+export function normalizeTrack(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return SUPPORTED_TRACKS.includes(normalized) ? normalized : 'angular';
+}
+
+export function filterByTrack(content, trackMode = 'angular') {
+  const track = normalizeTrack(trackMode);
+  return track === 'mixed' ? [...content] : content.filter((item) => item.track === track);
+}
 
 const clamp = (value, min = 0, max = 100) => Math.min(max, Math.max(min, Number(value) || 0));
 
@@ -13,6 +24,7 @@ export function normalizeState(input = {}) {
 
   return {
     locale: normalizeLocale(source.locale),
+    trackMode: normalizeTrack(source.trackMode),
     versionMode: VALID_MODES.has(String(source.versionMode)) ? String(source.versionMode) : 'mixed',
     modernFocus: source.modernFocus === true,
     bookmarks: Array.isArray(source.bookmarks) ? source.bookmarks.filter((id) => typeof id === 'string') : [],

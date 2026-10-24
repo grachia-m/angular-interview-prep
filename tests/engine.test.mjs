@@ -2,11 +2,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
+  SUPPORTED_TRACKS,
   applyRating,
   buildMockReport,
   calculateReadiness,
+  filterByTrack,
   filterLookup,
   getDeck,
+  normalizeTrack,
   normalizeState,
   selectCramSession,
   selectMockQuestions,
@@ -53,6 +56,29 @@ test('normalizeState persists only supported locales', () => {
   assert.equal(normalizeState({ locale: 'fr' }).locale, 'en');
   assert.equal(normalizeState(null).locale, 'en');
   assert.equal(normalizeLocale('ES-es'), 'es');
+});
+
+test('normalizeState migrates trackMode without changing progress', () => {
+  const progress = { 'signal-input-contract': { mastery: 72, attempts: 3 } };
+  const migrated = normalizeState({ locale: 'ru', progress });
+  assert.equal(migrated.trackMode, 'angular');
+  assert.deepEqual(migrated.progress, progress);
+  assert.equal(normalizeState({ trackMode: 'javascript', progress }).trackMode, 'javascript');
+  assert.equal(normalizeState({ trackMode: 'unknown', progress }).trackMode, 'angular');
+});
+
+test('every question has a supported stable track', () => {
+  assert.deepEqual(SUPPORTED_TRACKS, ['angular', 'javascript', 'html', 'css', 'mixed']);
+  assert.ok(questions.every(({ track }) => SUPPORTED_TRACKS.includes(track)));
+  assert.ok(questions.every(({ track }) => track !== 'mixed'));
+});
+
+test('track filtering keeps Angular and mixed compatibility', () => {
+  assert.equal(normalizeTrack('JAVASCRIPT'), 'javascript');
+  assert.equal(normalizeTrack('other'), 'angular');
+  assert.deepEqual(filterByTrack(questions, 'angular').map(({ id }) => id), questions.map(({ id }) => id));
+  assert.deepEqual(filterByTrack(questions, 'mixed').map(({ id }) => id), questions.map(({ id }) => id));
+  assert.deepEqual(filterByTrack(questions, 'javascript'), []);
 });
 
 test('resolveInitialLocale maps browser languages and falls back to English', () => {
